@@ -1,0 +1,46 @@
+{
+  "name": "@mc-nbt/mcworld",
+  "version": "0.1.0",
+  "description": "Convert Bedrock .mcworld (LevelDB zip) to Java Structure NBT. Node.js only.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@mc-nbt/core": "workspace:*",
+    "adm-zip": "^0.5.10",
+    "leveldb-zlib": "^1.2.0",
+    "prismarine-nbt": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.5.0"
+  },
+  "license": "MIT",
+  "author": "Taku128",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Taku128/mc-nbt-converter.git",
+    "directory": "packages/js/mcworld"
+  },
+  "homepage": "https://github.com/Taku128/mc-nbt-converter#readme"
+}

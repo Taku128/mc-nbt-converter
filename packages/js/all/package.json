@@ -1,0 +1,58 @@
+{
+  "name": "bedrock-nbt-converter",
+  "version": "2.0.0",
+  "description": "Convert Bedrock .mcworld / .mcstructure files to Java Structure NBT format using Chunker-derived mappings. Meta-package that re-exports @mc-nbt/core, @mc-nbt/mcstructure, and @mc-nbt/mcworld.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "bin": {
+    "bedrock-nbt-converter": "./bin/cli.js"
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "node test/mapping-coverage.test.mjs",
+    "test:coverage": "node test/mapping-coverage.test.mjs"
+  },
+  "keywords": [
+    "minecraft",
+    "bedrock",
+    "java",
+    "nbt",
+    "mcworld",
+    "mcstructure",
+    "converter",
+    "structure",
+    "chunker"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@mc-nbt/core": "workspace:*",
+    "@mc-nbt/mcstructure": "workspace:*",
+    "@mc-nbt/mcworld": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.5.0"
+  },
+  "author": "Taku128",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Taku128/mc-nbt-converter.git",
+    "directory": "packages/js/all"
+  },
+  "homepage": "https://github.com/Taku128/mc-nbt-converter#readme"
+}

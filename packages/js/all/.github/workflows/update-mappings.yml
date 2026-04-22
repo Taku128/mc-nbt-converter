@@ -1,0 +1,41 @@
+name: Update Block Mappings from Chunker
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday at midnight UTC
+  workflow_dispatch:       # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  update-mappings:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Clone Chunker (shallow)
+        run: git clone --depth 1 https://github.com/HiveGamesOSS/Chunker /tmp/Chunker
+
+      - name: Extract block mappings
+        run: node scripts/extract-mappings.js /tmp/Chunker
+
+      - name: Check for changes
+        id: check
+        run: |
+          git diff --quiet data/chunker-mappings.json && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/chunker-mappings.json
+          git commit -m "chore: update block mappings from Chunker $(date -u +%Y-%m-%d)"
+          git push

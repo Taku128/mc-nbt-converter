@@ -1,0 +1,51 @@
+{
+  "name": "@mc-nbt/core",
+  "version": "0.1.0",
+  "description": "Core primitives for Minecraft Bedrock → Java NBT conversion: block mapping, NBT builder, SubChunk parser. Browser- and Node-compatible.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist/",
+    "data/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "node --test test/*.test.mjs",
+    "dev": "tsup --watch"
+  },
+  "keywords": [
+    "minecraft",
+    "bedrock",
+    "java",
+    "nbt",
+    "mapping",
+    "core"
+  ],
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "prismarine-nbt": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.5.0"
+  },
+  "license": "MIT",
+  "author": "Taku128",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Taku128/mc-nbt-converter.git",
+    "directory": "packages/js/core"
+  },
+  "homepage": "https://github.com/Taku128/mc-nbt-converter#readme"
+}

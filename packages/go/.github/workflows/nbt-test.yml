@@ -1,0 +1,29 @@
+name: NBT Conversion Snapshot Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Snapshot Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0' # Matches the go.mod version
+          cache: true
+
+      - name: Install Dependencies
+        run: go mod download
+
+      - name: Run Tests
+        run: go test -v ./...

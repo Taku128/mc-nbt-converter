@@ -1,0 +1,25 @@
+{
+  "name": "mc-nbt-converter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo for Minecraft Bedrock → Java NBT conversion libraries (JS/TS + Go) with shared Chunker-derived mappings.",
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": [
+    "packages/js/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r --filter './packages/js/*' run build",
+    "test": "pnpm -r --filter './packages/js/*' run test",
+    "lint": "pnpm -r --filter './packages/js/*' run lint",
+    "test:go": "cd packages/go && go test ./...",
+    "test:coverage": "pnpm --filter @mc-nbt/all run test:coverage",
+    "sync-mappings": "node tools/sync-mappings/sync.mjs"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  },
+  "license": "MIT"
+}

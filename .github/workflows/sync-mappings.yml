@@ -1,0 +1,31 @@
+name: Weekly Mappings Sync
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Every Monday 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Pull latest Chunker mappings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      # TODO: replace this with the real Chunker extraction pipeline.
+      # - run: node tools/sync-mappings/fetch-chunker.mjs
+
+      - name: Sync shared → per-package data/
+        run: node tools/sync-mappings/sync.mjs
+
+      - name: Open PR if mappings changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/sync-mappings
+          commit-message: 'chore: sync Chunker mappings'
+          title: 'chore: sync Chunker mappings'
+          body: |
+            Weekly automated sync of Chunker-derived block mappings.
+            Review diff and merge if nothing regresses in `test:coverage`.
