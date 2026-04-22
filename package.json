@@ -12,7 +12,7 @@
     "test": "pnpm -r --filter './packages/js/*' run test",
     "lint": "pnpm -r --filter './packages/js/*' run lint",
     "test:go": "cd packages/go && go test ./...",
-    "test:coverage": "pnpm --filter @mc-nbt/all run test:coverage",
+    "test:coverage": "pnpm --filter @taku128/all run test:coverage",
     "sync-mappings": "node tools/sync-mappings/sync.mjs"
   },
   "devDependencies": {

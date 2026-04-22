@@ -1,10 +1,10 @@
 /**
- * @mc-nbt/mcstructure
+ * @taku128/mcstructure
  *
  * Convert Bedrock .mcstructure files (Little-Endian NBT) to Java Structure NBT.
  * Browser-compatible: consumes Uint8Array / ArrayBuffer buffers.
  *
- * For file-path (Node-only) APIs, import from `@mc-nbt/mcstructure/node`.
+ * For file-path (Node-only) APIs, import from `@taku128/mcstructure/node`.
  */
 import nbt from 'prismarine-nbt';
 import {
@@ -13,7 +13,7 @@ import {
   postProcessBlocks,
   type BlockEntry,
   type StructurePaletteEntry,
-} from '@mc-nbt/core';
+} from '@taku128/core';
 
 export interface ConvertResult {
   /** Gzipped Java Structure NBT buffer. */

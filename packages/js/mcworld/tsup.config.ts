@@ -9,5 +9,5 @@ export default defineConfig({
   treeshake: true,
   target: 'es2022',
   platform: 'node',
-  external: ['@mc-nbt/core', 'prismarine-nbt', 'leveldb-zlib', 'adm-zip'],
+  external: ['@taku128/core', 'prismarine-nbt', 'leveldb-zlib', 'adm-zip'],
 });

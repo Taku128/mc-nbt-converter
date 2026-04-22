@@ -43,4 +43,4 @@ Bedrock 側の旧ブロック名（キャメルケース時代など）を新ブ
 
 ## カバレッジ
 
-`pnpm --filter @mc-nbt/all run test:coverage` で全 Bedrock ブロックに対する解決率を測定。CI で `notfound=0` を担保。
+`pnpm --filter @taku128/all run test:coverage` で全 Bedrock ブロックに対する解決率を測定。CI で `notfound=0` を担保。

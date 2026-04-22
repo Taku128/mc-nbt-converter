@@ -1,4 +1,4 @@
-# @mc-nbt/mcworld
+# @taku128/mcworld
 
 Convert Bedrock `.mcworld` (LevelDB zip) files to Java Edition Structure NBT.  
 **Node.js only** — requires LevelDB native bindings.
@@ -6,13 +6,13 @@ Convert Bedrock `.mcworld` (LevelDB zip) files to Java Edition Structure NBT.
 ## Install
 
 ```bash
-npm install @mc-nbt/mcworld
+npm install @taku128/mcworld
 ```
 
 ## Usage
 
 ```ts
-import { convertMcworld } from '@mc-nbt/mcworld';
+import { convertMcworld } from '@taku128/mcworld';
 import { writeFileSync } from 'node:fs';
 
 const result = await convertMcworld('./world.mcworld', {

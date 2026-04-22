@@ -23,13 +23,13 @@ importers:
 
   packages/js/all:
     dependencies:
-      '@mc-nbt/core':
+      '@taku128/core':
         specifier: workspace:*
         version: link:../core
-      '@mc-nbt/mcstructure':
+      '@taku128/mcstructure':
         specifier: workspace:*
         version: link:../mcstructure
-      '@mc-nbt/mcworld':
+      '@taku128/mcworld':
         specifier: workspace:*
         version: link:../mcworld
     devDependencies:
@@ -64,7 +64,7 @@ importers:
 
   packages/js/mcstructure:
     dependencies:
-      '@mc-nbt/core':
+      '@taku128/core':
         specifier: workspace:*
         version: link:../core
       prismarine-nbt:
@@ -83,7 +83,7 @@ importers:
 
   packages/js/mcworld:
     dependencies:
-      '@mc-nbt/core':
+      '@taku128/core':
         specifier: workspace:*
         version: link:../core
       adm-zip:

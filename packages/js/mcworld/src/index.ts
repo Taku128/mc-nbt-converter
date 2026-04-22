@@ -1,5 +1,5 @@
 /**
- * @mc-nbt/mcworld
+ * @taku128/mcworld
  *
  * Convert Bedrock .mcworld files (zip containing a LevelDB) to Java Structure NBT.
  * Node.js only — uses adm-zip + leveldb-zlib.
@@ -19,7 +19,7 @@ import {
   postProcessBlocks,
   type BlockEntry,
   type StructurePaletteEntry,
-} from '@mc-nbt/core';
+} from '@taku128/core';
 
 const TAG_SUBCHUNK_PREFIX = 47;
 

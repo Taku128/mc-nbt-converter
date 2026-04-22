@@ -3,9 +3,9 @@
  *
  * Re-exports the split packages so existing users can keep `import 'bedrock-nbt-converter'`
  * unchanged. New code is encouraged to depend on the specific sub-packages:
- *   - @mc-nbt/core          — mapping + NBT builder + SubChunk parser
- *   - @mc-nbt/mcstructure   — .mcstructure → Java NBT (browser + Node)
- *   - @mc-nbt/mcworld       — .mcworld → Java NBT (Node only)
+ *   - @taku128/core          — mapping + NBT builder + SubChunk parser
+ *   - @taku128/mcstructure   — .mcstructure → Java NBT (browser + Node)
+ *   - @taku128/mcworld       — .mcworld → Java NBT (Node only)
  */
 
 export {
@@ -15,7 +15,7 @@ export {
   buildStructureNbt,
   parseSubChunk,
   postProcessBlocks,
-} from '@mc-nbt/core';
+} from '@taku128/core';
 
 export type {
   JavaBlockState,
@@ -24,10 +24,10 @@ export type {
   SubChunkPaletteEntry,
   BlockEntry,
   StructurePaletteEntry,
-} from '@mc-nbt/core';
+} from '@taku128/core';
 
-export { convertMcstructure, convertMcstructureBuffer } from '@mc-nbt/mcstructure/node';
-export type { ConvertResult } from '@mc-nbt/mcstructure/node';
+export { convertMcstructure, convertMcstructureBuffer } from '@taku128/mcstructure/node';
+export type { ConvertResult } from '@taku128/mcstructure/node';
 
-export { convertMcworld } from '@mc-nbt/mcworld';
-export type { ConvertMcworldOptions } from '@mc-nbt/mcworld';
+export { convertMcworld } from '@taku128/mcworld';
+export type { ConvertMcworldOptions } from '@taku128/mcworld';

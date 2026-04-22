@@ -1,4 +1,4 @@
-# @mc-nbt/mcstructure
+# @taku128/mcstructure
 
 Convert Bedrock `.mcstructure` files to Java Edition Structure NBT.  
 Works in the **browser** (File API) and **Node.js**.
@@ -6,13 +6,13 @@ Works in the **browser** (File API) and **Node.js**.
 ## Install
 
 ```bash
-npm install @mc-nbt/mcstructure
+npm install @taku128/mcstructure
 ```
 
 ## Browser usage
 
 ```ts
-import { convertMcstructureBuffer } from '@mc-nbt/mcstructure';
+import { convertMcstructureBuffer } from '@taku128/mcstructure';
 
 // From <input type="file">
 const buf = new Uint8Array(await file.arrayBuffer());
@@ -27,7 +27,7 @@ const result = await convertMcstructureBuffer(buf);
 ## Node.js usage (file path)
 
 ```ts
-import { convertMcstructure } from '@mc-nbt/mcstructure/node';
+import { convertMcstructure } from '@taku128/mcstructure/node';
 
 const result = await convertMcstructure('./build.mcstructure');
 import { writeFileSync } from 'node:fs';

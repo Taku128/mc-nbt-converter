@@ -4,18 +4,18 @@
 
 ### Breaking Changes
 - Package restructured into a monorepo with granular sub-packages:
-  - `@mc-nbt/core` — browser + Node mapping, NBT builder, SubChunk parser
-  - `@mc-nbt/mcstructure` — browser + Node `.mcstructure` converter
-  - `@mc-nbt/mcworld` — Node-only `.mcworld` (LevelDB) converter
+  - `@taku128/core` — browser + Node mapping, NBT builder, SubChunk parser
+  - `@taku128/mcstructure` — browser + Node `.mcstructure` converter
+  - `@taku128/mcworld` — Node-only `.mcworld` (LevelDB) converter
   - `bedrock-nbt-converter` — thin meta-package re-exporting the above (backward-compatible API)
 - Replaced Node-only `zlib` with `fflate` → output now works in browsers
 
 ### New Features
 - 4-layer block mapping: `aliases.json` → `overrides.json` → `chunker-mappings.json` → `fallbacks.json`
 - 246/246 known Bedrock block names resolve without error
-- `@mc-nbt/mcstructure` browser entry: `convertMcstructureBuffer(Uint8Array | ArrayBuffer)`
-- `@mc-nbt/mcstructure/node` subpath: `convertMcstructure(filePath)` (Node-only)
-- `@mc-nbt/core` exports: `mapBlock`, `reportUnmapped`, `resetUnmapped`, `buildStructureNbt`, `parseSubChunk`, `postProcessBlocks`
+- `@taku128/mcstructure` browser entry: `convertMcstructureBuffer(Uint8Array | ArrayBuffer)`
+- `@taku128/mcstructure/node` subpath: `convertMcstructure(filePath)` (Node-only)
+- `@taku128/core` exports: `mapBlock`, `reportUnmapped`, `resetUnmapped`, `buildStructureNbt`, `parseSubChunk`, `postProcessBlocks`
 - Weekly automated mapping sync via GitHub Actions
 
 ### Internal

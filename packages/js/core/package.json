@@ -1,5 +1,5 @@
 {
-  "name": "@mc-nbt/core",
+  "name": "@taku128/core",
   "version": "0.1.0",
   "description": "Core primitives for Minecraft Bedrock → Java NBT conversion: block mapping, NBT builder, SubChunk parser. Browser- and Node-compatible.",
   "type": "module",

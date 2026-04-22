@@ -1,7 +1,7 @@
 /**
- * Node-only file-path entry for @mc-nbt/mcstructure.
+ * Node-only file-path entry for @taku128/mcstructure.
  *
- * Import via: `import { convertMcstructure } from '@mc-nbt/mcstructure/node';`
+ * Import via: `import { convertMcstructure } from '@taku128/mcstructure/node';`
  */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';

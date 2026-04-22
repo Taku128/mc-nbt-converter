@@ -1,5 +1,5 @@
 {
-  "name": "@mc-nbt/mcworld",
+  "name": "@taku128/mcworld",
   "version": "0.1.0",
   "description": "Convert Bedrock .mcworld (LevelDB zip) to Java Structure NBT. Node.js only.",
   "type": "module",
@@ -26,7 +26,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@mc-nbt/core": "workspace:*",
+    "@taku128/core": "workspace:*",
     "adm-zip": "^0.5.10",
     "leveldb-zlib": "^1.2.0",
     "prismarine-nbt": "^2.5.0"

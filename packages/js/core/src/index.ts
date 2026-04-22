@@ -1,5 +1,5 @@
 /**
- * @mc-nbt/core
+ * @taku128/core
  *
  * Minecraft Bedrock → Java NBT conversion primitives:
  *  - Block name mapping (Chunker-derived + 4-layer override)

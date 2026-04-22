@@ -1,5 +1,5 @@
 {
-  "name": "@mc-nbt/mcstructure",
+  "name": "@taku128/mcstructure",
   "version": "0.1.0",
   "description": "Convert Bedrock .mcstructure files to Java Structure NBT. Browser- and Node-compatible (no LevelDB required).",
   "type": "module",
@@ -28,7 +28,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@mc-nbt/core": "workspace:*",
+    "@taku128/core": "workspace:*",
     "prismarine-nbt": "^2.5.0"
   },
   "devDependencies": {

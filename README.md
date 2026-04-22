@@ -15,9 +15,9 @@ mc-nbt-converter/
 │   └── fallbacks.json        # 不明時の代替ルール
 ├── packages/
 │   ├── js/
-│   │   ├── core/             # @mc-nbt/core          — マッピング + NBT構築（ブラウザ可）
-│   │   ├── mcstructure/      # @mc-nbt/mcstructure   — .mcstructure 専用（ブラウザ可）
-│   │   ├── mcworld/          # @mc-nbt/mcworld       — .mcworld 抽出（Node 専用）
+│   │   ├── core/             # @taku128/core          — マッピング + NBT構築（ブラウザ可）
+│   │   ├── mcstructure/      # @taku128/mcstructure   — .mcstructure 専用（ブラウザ可）
+│   │   ├── mcworld/          # @taku128/mcworld       — .mcworld 抽出（Node 専用）
 │   │   └── all/              # bedrock-nbt-converter — 全部入りメタパッケージ
 │   └── go/                   # github.com/Taku128/mc-nbt-converter/packages/go
 ├── tests/golden/             # JS/Go 出力一致のクロステスト
@@ -28,9 +28,9 @@ mc-nbt-converter/
 
 | パッケージ | 環境 | 用途 |
 |-----------|------|------|
-| `@mc-nbt/core` | Browser / Node | マッピング照会・NBT組立のみ |
-| `@mc-nbt/mcstructure` | Browser / Node | `.mcstructure` パース・変換（配布回路の閲覧、材料リスト、部分表示） |
-| `@mc-nbt/mcworld` | Node | `.mcworld` の LevelDB 抽出 |
+| `@taku128/core` | Browser / Node | マッピング照会・NBT組立のみ |
+| `@taku128/mcstructure` | Browser / Node | `.mcstructure` パース・変換（配布回路の閲覧、材料リスト、部分表示） |
+| `@taku128/mcworld` | Node | `.mcworld` の LevelDB 抽出 |
 | `bedrock-nbt-converter` | Node | CLI 含む全部入り（既存公開名互換） |
 | Go パッケージ | Go | バックエンド・高速処理 |
 

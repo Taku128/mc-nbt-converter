@@ -9,5 +9,5 @@ export default defineConfig({
   treeshake: true,
   target: 'es2022',
   platform: 'neutral',
-  external: ['@mc-nbt/core', 'prismarine-nbt', 'node:fs', 'node:path'],
+  external: ['@taku128/core', 'prismarine-nbt', 'node:fs', 'node:path'],
 });
