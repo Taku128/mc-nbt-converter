@@ -1,5 +1,5 @@
 {
-  "name": "bedrock-nbt-converter",
+  "name": "@taku128/bedrock-nbt-converter",
   "version": "2.0.0",
   "description": "Convert Bedrock .mcworld / .mcstructure files to Java Structure NBT format using Chunker-derived mappings. Meta-package that re-exports @taku128/core, @taku128/mcstructure, and @taku128/mcworld.",
   "type": "module",
@@ -14,12 +14,14 @@
     }
   },
   "bin": {
-    "bedrock-nbt-converter": "./bin/cli.js"
+    "bedrock-nbt-converter": "./bin/cli.js",
+    "taku128-bedrock-nbt-converter": "./bin/cli.js"
   },
   "files": [
     "dist/",
     "bin/",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",

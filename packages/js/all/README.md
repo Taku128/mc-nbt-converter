@@ -7,7 +7,7 @@ Bedrock Edition の `.mcworld` / `.mcstructure` ファイルを Java Edition の
 ## インストール
 
 ```bash
-npm install bedrock-nbt-converter
+npm install @taku128/bedrock-nbt-converter
 ```
 
 ## API 使用例
@@ -15,7 +15,7 @@ npm install bedrock-nbt-converter
 ### .mcstructure → Java NBT
 
 ```javascript
-import { convertMcstructure } from 'bedrock-nbt-converter';
+import { convertMcstructure } from '@taku128/bedrock-nbt-converter';
 import fs from 'fs';
 
 const result = await convertMcstructure('./my-build.mcstructure');
@@ -28,7 +28,7 @@ console.log(result.blockCount); // 5015
 ### .mcworld → Java NBT（座標範囲指定）
 
 ```javascript
-import { convertMcworld } from 'bedrock-nbt-converter';
+import { convertMcworld } from '@taku128/bedrock-nbt-converter';
 import fs from 'fs';
 
 const result = await convertMcworld('./world.mcworld', {
@@ -42,7 +42,7 @@ fs.writeFileSync('region.nbt', result.nbt);
 ### Buffer API（React/Angular等のブラウザ用途）
 
 ```javascript
-import { convertMcstructureBuffer } from 'bedrock-nbt-converter';
+import { convertMcstructureBuffer } from '@taku128/bedrock-nbt-converter';
 
 // File API から取得した ArrayBuffer を直接変換
 const file = event.target.files[0];
@@ -56,7 +56,7 @@ const result = await convertMcstructureBuffer(buffer);
 独自のチャンクループなどを実装したい開発者向けに、サブチャンクのみの解読やNBTバッファの構築を行う低レイヤーAPIも公開しています。
 
 ```javascript
-import { parseSubChunk, buildStructureNbt } from 'bedrock-nbt-converter';
+import { parseSubChunk, buildStructureNbt } from '@taku128/bedrock-nbt-converter';
 
 // 1. Bedrock LevelDB から読みだした生の Value (Buffer) を渡す
 const decodedChunk = parseSubChunk(rawSubChunkBuffer);
@@ -73,7 +73,7 @@ const nbtBuffer = buildStructureNbt({
 ### ブロックマッピング単体利用
 
 ```javascript
-import { mapBlock } from 'bedrock-nbt-converter';
+import { mapBlock } from '@taku128/bedrock-nbt-converter';
 
 const java = mapBlock('minecraft:concrete', { color: 'gray' });
 // { name: 'minecraft:gray_concrete', properties: {} }
