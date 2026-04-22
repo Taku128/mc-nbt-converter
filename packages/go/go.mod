@@ -1,4 +1,4 @@
-module github.com/Taku128/go-bedrock-nbt-converter
+module github.com/Taku128/mc-nbt-converter/packages/go
 
 go 1.24.0
 

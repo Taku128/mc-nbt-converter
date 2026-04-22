@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Taku128/go-bedrock-nbt-converter/pkg/mcstruct"
-	"github.com/Taku128/go-bedrock-nbt-converter/pkg/mcworld"
+	"github.com/Taku128/mc-nbt-converter/packages/go/pkg/mcstruct"
+	"github.com/Taku128/mc-nbt-converter/packages/go/pkg/mcworld"
 )
 
 func main() {

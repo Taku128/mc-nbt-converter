@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Taku128/go-bedrock-nbt-converter/data"
+	"github.com/Taku128/mc-nbt-converter/packages/go/data"
 )
 
 var redstoneConnectables = make(map[string]bool)

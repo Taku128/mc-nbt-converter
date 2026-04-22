@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/Tnze/go-mc/nbt"
-	bedrocknbt "github.com/Taku128/go-bedrock-nbt-converter"
+	bedrocknbt "github.com/Taku128/mc-nbt-converter/packages/go"
 )
 
 var update = flag.Bool("update", false, "update the generated expected NBT snapshot")

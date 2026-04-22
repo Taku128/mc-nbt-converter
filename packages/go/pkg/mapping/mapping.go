@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Taku128/go-bedrock-nbt-converter/data"
+	"github.com/Taku128/mc-nbt-converter/packages/go/data"
 )
 
 // MappingTable is the shared shape of chunker-mappings.json and overrides.json.

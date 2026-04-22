@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Taku128/go-bedrock-nbt-converter/pkg/buildnbt"
-	"github.com/Taku128/go-bedrock-nbt-converter/pkg/mapping"
+	"github.com/Taku128/mc-nbt-converter/packages/go/pkg/buildnbt"
+	"github.com/Taku128/mc-nbt-converter/packages/go/pkg/mapping"
 
 	"github.com/sandertv/gophertunnel/minecraft/nbt"
 )

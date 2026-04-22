@@ -16,7 +16,7 @@ If you plan to perform 3D rendering or custom programmatic analysis of Bedrock w
 ### 1. Install
 
 ```bash
-go get github.com/Taku128/go-bedrock-nbt-converter
+go get github.com/Taku128/mc-nbt-converter/packages/go
 ```
 
 ### 2. Import into your application
@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Taku128/go-bedrock-nbt-converter"
+	"github.com/Taku128/mc-nbt-converter/packages/go"
 )
 
 func main() {
