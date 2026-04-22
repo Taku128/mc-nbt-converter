@@ -4,9 +4,12 @@
  * Convert Bedrock .mcstructure files (Little-Endian NBT) to Java Structure NBT.
  * Browser-compatible: consumes Uint8Array / ArrayBuffer buffers.
  *
+ * Uses deepslate for both Bedrock NBT parsing and Java NBT emission — no
+ * `prismarine-nbt` / Node `zlib` / Node `Buffer` dependencies.
+ *
  * For file-path (Node-only) APIs, import from `@taku128/mcstructure/node`.
  */
-import nbt from 'prismarine-nbt';
+import { NbtCompound, NbtFile, NbtList, NbtTag, NbtType } from 'deepslate/nbt';
 import {
   mapBlock,
   buildStructureNbt,
@@ -26,40 +29,53 @@ export interface ConvertResult {
   paletteCount: number;
 }
 
-interface BedrockRoot {
-  size: { value: { value: [number, number, number] } };
-  structure: {
-    value: {
-      block_indices: { value: { value: Array<{ value: number[] }> } };
-      palette: {
-        value: {
-          default: {
-            value: {
-              block_palette: {
-                value: {
-                  value: Array<{
-                    name?: { value: string };
-                    states?: { value: Record<string, unknown> };
-                  }>;
-                };
-              };
-            };
-          };
-        };
-      };
-    };
-  };
+function readIntTuple3(list: NbtList): [number, number, number] {
+  return [list.getNumber(0), list.getNumber(1), list.getNumber(2)];
 }
 
-function unwrap(v: unknown): unknown {
-  if (v && typeof v === 'object' && 'value' in v) return (v as { value: unknown }).value;
-  return v;
+function simplifyStates(states: NbtCompound): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  states.forEach((key, tag) => {
+    out[key] = simplifyTag(tag);
+  });
+  return out;
 }
 
-function convertParsed(root: BedrockRoot): ConvertResult {
-  const size = root.size.value.value;
-  const blockIndices = root.structure.value.block_indices.value.value[0]!.value;
-  const rawPalette = root.structure.value.palette.value.default.value.block_palette.value.value;
+function simplifyTag(tag: NbtTag): unknown {
+  if (tag.isNumber()) return tag.getAsNumber();
+  if (tag.isString()) return tag.getAsString();
+  if (tag.isCompound()) return simplifyStates(tag);
+  return undefined;
+}
+
+/**
+ * Read the `block_indices` list. Bedrock mcstructure stores two layers
+ * (primary + waterlogging); both are int lists of length x*y*z. We only use
+ * layer 0 — layer 1 is rarely meaningful for our Java target.
+ */
+function readLayer0(structure: NbtCompound): number[] {
+  const indicesList = structure.getList('block_indices', NbtType.List);
+  if (indicesList.length === 0) {
+    throw new Error('[mcstructure] block_indices list is empty');
+  }
+  // Each layer is itself a List<Int>.
+  const layer0 = indicesList.getList(0, NbtType.Int);
+  const out: number[] = new Array(layer0.length);
+  for (let i = 0; i < layer0.length; i++) out[i] = layer0.getNumber(i);
+  return out;
+}
+
+function convertParsed(root: NbtCompound): ConvertResult {
+  const sizeList = root.getList('size', NbtType.Int);
+  const size = readIntTuple3(sizeList);
+
+  const structure = root.getCompound('structure');
+  const blockIndices = readLayer0(structure);
+
+  const rawPalette = structure
+    .getCompound('palette')
+    .getCompound('default')
+    .getList('block_palette', NbtType.Compound);
 
   const javaPaletteMap = new Map<string, number>();
   const javaPalette: StructurePaletteEntry[] = [];
@@ -73,22 +89,22 @@ function convertParsed(root: BedrockRoot): ConvertResult {
 
         if (paletteIdx < 0 || paletteIdx >= rawPalette.length) continue;
 
-        const entry = rawPalette[paletteIdx]!;
-        const bedrockName = entry.name?.value ?? 'minecraft:air';
+        const entry = rawPalette.getCompound(paletteIdx);
+        const bedrockName = entry.hasString('name')
+          ? entry.getString('name')
+          : 'minecraft:air';
         if (bedrockName === 'minecraft:air') continue;
 
-        const bedrockStates: Record<string, unknown> = {};
-        const statesCompound = entry.states?.value;
-        if (statesCompound && typeof statesCompound === 'object') {
-          for (const [k, v] of Object.entries(statesCompound)) {
-            bedrockStates[k] = unwrap(v);
-          }
-        }
+        const bedrockStates: Record<string, unknown> = entry.hasCompound('states')
+          ? simplifyStates(entry.getCompound('states'))
+          : {};
 
         const javaEntry = mapBlock(bedrockName, bedrockStates);
         if (javaEntry.name === 'minecraft:air') continue;
 
-        const propEntries = Object.entries(javaEntry.properties).sort((a, b) => a[0].localeCompare(b[0]));
+        const propEntries = Object.entries(javaEntry.properties).sort((a, b) =>
+          a[0].localeCompare(b[0]),
+        );
         const propStr = propEntries.map(([pk, pv]) => `${pk}=${pv}`).join(',');
         const stateKey = `${javaEntry.name}|${propStr}`;
 
@@ -132,14 +148,6 @@ export async function convertMcstructureBuffer(
   buffer: Uint8Array | ArrayBuffer,
 ): Promise<ConvertResult> {
   const u8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  // prismarine-nbt requires a Node Buffer under Node; its browser shim accepts Uint8Array.
-  // Buffer is a Uint8Array subclass so we upgrade to Buffer when available.
-  const data: Uint8Array =
-    typeof Buffer !== 'undefined'
-      ? (Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength) as unknown as Uint8Array)
-      : u8;
-  const parsed = await (nbt as unknown as {
-    parse: (b: Uint8Array) => Promise<{ parsed: { value: BedrockRoot } }>;
-  }).parse(data);
-  return convertParsed(parsed.parsed.value);
+  const file = NbtFile.read(u8, { littleEndian: true, compression: 'none' });
+  return convertParsed(file.root);
 }

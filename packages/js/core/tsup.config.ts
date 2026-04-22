@@ -13,4 +13,5 @@ export default defineConfig({
   },
   target: 'es2022',
   platform: 'neutral',
+  external: ['deepslate'],
 });

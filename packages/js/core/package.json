@@ -1,6 +1,6 @@
 {
   "name": "@taku128/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Core primitives for Minecraft Bedrock → Java NBT conversion: block mapping, NBT builder, SubChunk parser. Browser- and Node-compatible.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -32,9 +32,9 @@
     "mapping",
     "core"
   ],
+  "sideEffects": false,
   "dependencies": {
-    "fflate": "^0.8.2",
-    "prismarine-nbt": "^2.5.0"
+    "deepslate": "^0.25.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

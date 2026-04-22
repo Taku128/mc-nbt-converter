@@ -1,16 +1,28 @@
 /**
- * Java Structure NBT builder. Browser-compatible — uses `fflate` for gzip
- * instead of Node's `zlib` module.
+ * Java Structure NBT builder. Browser-compatible — uses deepslate for NBT
+ * encoding (pako-based gzip) so no Node `zlib` / `Buffer` polyfill is needed.
  */
-import nbt from 'prismarine-nbt';
-import { gzipSync } from 'fflate';
+import {
+  NbtCompound,
+  NbtFile,
+  NbtInt,
+  NbtList,
+  NbtString,
+  NbtType,
+} from 'deepslate/nbt';
 
 export interface BuildStructureOptions {
   size: [number, number, number];
   palette: Array<{ Name: string; Properties?: Record<string, unknown> }>;
   blocks: Array<{ pos: [number, number, number]; state: number }>;
-  /** Java data version. Defaults to 1.20.4 (3700). */
+  /** Java data version. Defaults to 1.20.4 (3953 kept for parity with prior behaviour). */
   dataVersion?: number;
+}
+
+function intList(values: number[]): NbtList<NbtInt> {
+  const list = new NbtList<NbtInt>([], NbtType.Int);
+  for (const v of values) list.add(new NbtInt(v));
+  return list;
 }
 
 /** Build a gzipped Java Structure NBT buffer. */
@@ -20,40 +32,36 @@ export function buildStructureNbt({
   blocks,
   dataVersion = 3953,
 }: BuildStructureOptions): Uint8Array {
-  const nbtBlocks = blocks.map((b) => ({
-    pos: {
-      type: 'list',
-      value: { type: 'int', value: b.pos },
-    },
-    state: { type: 'int', value: b.state },
-  }));
+  const root = new NbtCompound();
 
-  const nbtPalette = palette.map((entry) => {
-    const p: Record<string, unknown> = {
-      Name: { type: 'string', value: entry.Name },
-    };
+  root.set('size', intList(size));
+
+  const paletteList = new NbtList<NbtCompound>([], NbtType.Compound);
+  for (const entry of palette) {
+    const pEntry = new NbtCompound();
+    pEntry.set('Name', new NbtString(entry.Name));
     if (entry.Properties && Object.keys(entry.Properties).length > 0) {
-      const propsCompound: Record<string, { type: 'string'; value: string }> = {};
+      const props = new NbtCompound();
       for (const [k, v] of Object.entries(entry.Properties)) {
-        propsCompound[k] = { type: 'string', value: String(v) };
+        props.set(k, new NbtString(String(v)));
       }
-      p.Properties = { type: 'compound', value: propsCompound };
+      pEntry.set('Properties', props);
     }
-    return p;
-  });
+    paletteList.add(pEntry);
+  }
+  root.set('palette', paletteList);
 
-  const rootObj = {
-    type: 'compound' as const,
-    name: '',
-    value: {
-      size: { type: 'list', value: { type: 'int', value: size } },
-      palette: { type: 'list', value: { type: 'compound', value: nbtPalette } },
-      blocks: { type: 'list', value: { type: 'compound', value: nbtBlocks } },
-      DataVersion: { type: 'int', value: dataVersion },
-    },
-  };
+  const blocksList = new NbtList<NbtCompound>([], NbtType.Compound);
+  for (const b of blocks) {
+    const bEntry = new NbtCompound();
+    bEntry.set('pos', intList(b.pos));
+    bEntry.set('state', new NbtInt(b.state));
+    blocksList.add(bEntry);
+  }
+  root.set('blocks', blocksList);
 
-  // prismarine-nbt returns a Buffer (Node) or Uint8Array (browser shim).
-  const rawNbt = nbt.writeUncompressed(rootObj as never, 'big');
-  return gzipSync(new Uint8Array(rawNbt));
+  root.set('DataVersion', new NbtInt(dataVersion));
+
+  const file = new NbtFile('', root, 'gzip', false, undefined);
+  return file.write();
 }
