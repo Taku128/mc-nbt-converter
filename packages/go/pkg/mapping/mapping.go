@@ -174,6 +174,12 @@ var trapdoorDir = map[string]string{
 	"0": "east", "1": "west", "2": "south", "3": "north",
 }
 
+// Bedrock `direction` (0-3) for repeater / comparator → Java `facing`.
+// Output side faces: 0=south, 1=west, 2=north, 3=east.
+var repeaterDir = map[string]string{
+	"0": "south", "1": "west", "2": "north", "3": "east",
+}
+
 var railShape = map[string]string{
 	"0": "north_south", "1": "east_west", "2": "ascending_east",
 	"3": "ascending_west", "4": "ascending_north", "5": "ascending_south",
@@ -368,6 +374,15 @@ func MapBlock(bedrockName string, bedrockProps map[string]interface{}) JavaBlock
 				props["powered"] = "false"
 			}
 		}
+		if val, ok := props["direction"]; ok {
+			if d, ok2 := repeaterDir[val]; ok2 {
+				props["facing"] = d
+			}
+			delete(props, "direction")
+		}
+		if _, ok := props["facing"]; !ok {
+			props["facing"] = "north"
+		}
 	}
 
 	// Repeater
@@ -387,6 +402,15 @@ func MapBlock(bedrockName string, bedrockProps map[string]interface{}) JavaBlock
 		}
 		if _, ok := props["locked"]; !ok {
 			props["locked"] = "false"
+		}
+		if val, ok := props["direction"]; ok {
+			if d, ok2 := repeaterDir[val]; ok2 {
+				props["facing"] = d
+			}
+			delete(props, "direction")
+		}
+		if _, ok := props["facing"]; !ok {
+			props["facing"] = "north"
 		}
 	}
 

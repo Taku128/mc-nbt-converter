@@ -43,6 +43,9 @@ const FLIP_DIR: Record<string, string> = {
   north: 'south', south: 'north', east: 'west', west: 'east',
 };
 const TRAPDOOR_DIR = ['east', 'west', 'south', 'north'];
+// Bedrock `direction` (0-3) for repeater / comparator → Java `facing`.
+// Output side faces: 0=south, 1=west, 2=north, 3=east.
+const REPEATER_DIR = ['south', 'west', 'north', 'east'];
 const RAIL_SHAPE: Record<string, string> = {
   '0': 'north_south', '1': 'east_west', '2': 'ascending_east',
   '3': 'ascending_west', '4': 'ascending_north', '5': 'ascending_south',
@@ -246,6 +249,12 @@ export function mapBlock(
     } else {
       props.powered = (bedrockName === 'minecraft:powered_comparator') ? 'true' : 'false';
     }
+    if (props.direction !== undefined) {
+      const idx = Number(props.direction);
+      if (Number.isInteger(idx) && idx >= 0 && idx < 4) props.facing = REPEATER_DIR[idx]!;
+      delete props.direction;
+    }
+    if (!props.facing) props.facing = 'north';
   }
 
   // Repeater
@@ -258,6 +267,12 @@ export function mapBlock(
       props.delay = '1';
     }
     if (!props.locked) props.locked = 'false';
+    if (props.direction !== undefined) {
+      const idx = Number(props.direction);
+      if (Number.isInteger(idx) && idx >= 0 && idx < 4) props.facing = REPEATER_DIR[idx]!;
+      delete props.direction;
+    }
+    if (!props.facing) props.facing = 'north';
   }
 
   // Observer

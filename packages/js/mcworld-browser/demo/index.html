@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mcworld → Java NBT (browser)</title>
+    <style>
+      :root {
+        --bg: #1e1e22;
+        --panel: #2a2a30;
+        --border: #3a3a42;
+        --text: #e6e6e6;
+        --muted: #9a9aa3;
+        --accent: #6cb6ff;
+        --warn: #ffb86c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.5 system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        grid-template-rows: 100vh;
+      }
+      #side {
+        background: var(--panel);
+        border-right: 1px solid var(--border);
+        padding: 16px;
+        overflow-y: auto;
+      }
+      #stage {
+        position: relative;
+      }
+      #viewer {
+        position: absolute;
+        inset: 0;
+        background: #15151a;
+      }
+      h1 { font-size: 16px; margin: 0 0 12px; }
+      h2 { font-size: 13px; margin: 16px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+      .row { display: grid; grid-template-columns: 30px 1fr; gap: 6px; align-items: center; margin-bottom: 4px; }
+      .row label { color: var(--muted); }
+      .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+      input[type=number] {
+        width: 100%; background: #1b1b1f; color: var(--text);
+        border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px;
+        font-family: ui-monospace, monospace;
+      }
+      input[type=file] { color: var(--muted); }
+      button {
+        width: 100%; background: var(--accent); color: #0d2238; border: 0;
+        padding: 10px; font-weight: 600; border-radius: 4px; cursor: pointer;
+      }
+      button:disabled { background: #444; color: #777; cursor: not-allowed; }
+      .info { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+      .warn { color: var(--warn); }
+      .placeholder {
+        position: absolute; inset: 0; display: grid; place-items: center;
+        color: var(--muted); pointer-events: none;
+      }
+      select {
+        width: 100%; background: #1b1b1f; color: var(--text);
+        border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <aside id="side">
+      <h1>mcworld → Java NBT</h1>
+
+      <h2>1. ファイル</h2>
+      <input id="file" type="file" accept=".mcworld" />
+      <p id="scan-info" class="info">.mcworld を選択してください</p>
+
+      <h2>2. ディメンション</h2>
+      <select id="dim">
+        <option value="0">overworld (0)</option>
+        <option value="1">nether (1)</option>
+        <option value="2">end (2)</option>
+      </select>
+
+      <h2>3. 範囲</h2>
+      <p class="info">始点 (min) / 終点 (max) のワールド座標</p>
+      <div class="pair">
+        <div>
+          <div class="row"><label>X</label><input id="min-x" type="number" step="1" /></div>
+          <div class="row"><label>Y</label><input id="min-y" type="number" step="1" /></div>
+          <div class="row"><label>Z</label><input id="min-z" type="number" step="1" /></div>
+        </div>
+        <div>
+          <div class="row"><label>X</label><input id="max-x" type="number" step="1" /></div>
+          <div class="row"><label>Y</label><input id="max-y" type="number" step="1" /></div>
+          <div class="row"><label>Z</label><input id="max-z" type="number" step="1" /></div>
+        </div>
+      </div>
+      <p id="range-info" class="info"></p>
+
+      <h2>4. 変換</h2>
+      <button id="convert" disabled>NBT を変換してダウンロード</button>
+      <p id="convert-info" class="info"></p>
+    </aside>
+    <main id="stage">
+      <div id="viewer"></div>
+      <div class="placeholder" id="placeholder">プレビュー (3D ビュー) は次フェーズで実装します</div>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

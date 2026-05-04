@@ -1,7 +1,7 @@
 {
-  "name": "@taku128/core",
-  "version": "0.2.1",
-  "description": "Core primitives for Minecraft Bedrock → Java NBT conversion: block mapping, NBT builder, SubChunk parser. Browser- and Node-compatible.",
+  "name": "@taku128/mcworld-browser",
+  "version": "0.1.1",
+  "description": "Convert Bedrock .mcworld (LevelDB zip) to Java Structure NBT in the browser. Pure JS — no native LevelDB binding.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -15,38 +15,37 @@
   },
   "files": [
     "dist/",
-    "data/",
     "README.md",
     "LICENSE"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "test": "node --test test/*.test.mjs",
-    "dev": "tsup --watch"
+    "demo": "vite --config demo/vite.config.ts",
+    "demo:build": "vite build --config demo/vite.config.ts"
   },
-  "keywords": [
-    "minecraft",
-    "bedrock",
-    "java",
-    "nbt",
-    "mapping",
-    "core"
-  ],
-  "sideEffects": false,
   "dependencies": {
-    "deepslate": "^0.25.1"
+    "@taku128/core": "workspace:*",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
+    "@taku128/mcworld": "workspace:^",
     "@types/node": "^20.0.0",
+    "adm-zip": "^0.5.10",
+    "deepslate": "^0.25.1",
+    "gl-matrix": "^3.4.4",
+    "leveldb-zlib": "^1.2.0",
     "tsup": "^8.3.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vite": "^8.0.10"
   },
   "license": "MIT",
   "author": "Taku128",
   "repository": {
     "type": "git",
     "url": "https://github.com/Taku128/mc-nbt-converter.git",
-    "directory": "packages/js/core"
+    "directory": "packages/js/mcworld-browser"
   },
   "homepage": "https://github.com/Taku128/mc-nbt-converter#readme"
 }
