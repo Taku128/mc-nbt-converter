@@ -362,12 +362,32 @@ export function mapBlock(
 
   // Lectern
   if (shortName === 'lectern') {
+    // Bedrock の direction (0-3) → Java facing
+    if (props.direction !== undefined) {
+      const idx = Number(props.direction);
+      if (Number.isInteger(idx) && idx >= 0 && idx < 4) props.facing = REPEATER_DIR[idx]!;
+      delete props.direction;
+    }
+    // Bedrock の powered_bit はページめくりで一瞬出る信号 = Java の powered。has_book ではない。
     if (props.powered_bit !== undefined) {
-      props.has_book = (props.powered_bit === '1' || props.powered_bit === 'true') ? 'true' : 'false';
+      props.powered = (props.powered_bit === '1' || props.powered_bit === 'true') ? 'true' : 'false';
       delete props.powered_bit;
     }
+    if (!props.facing) props.facing = 'north';
+    if (props.has_book === undefined) props.has_book = 'false';
     if (props.powered === undefined) props.powered = 'false';
-    if (!props.has_book) props.has_book = 'false';
+  }
+
+  // Slabs（チャンカーマッピングで *_double_slab → *_slab にリネーム済みの場合がある）
+  if (shortName.endsWith('_slab')) {
+    if (bedrockName.includes('double_slab')) {
+      props.type = 'double';
+    } else if (props.top_slot_bit !== undefined) {
+      props.type = (props.top_slot_bit === '1' || props.top_slot_bit === 'true') ? 'top' : 'bottom';
+    }
+    delete props.top_slot_bit;
+    if (!props.type) props.type = 'bottom';
+    if (!props.waterlogged) props.waterlogged = 'false';
   }
 
   // Redstone wire

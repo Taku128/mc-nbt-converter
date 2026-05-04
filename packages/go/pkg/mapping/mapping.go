@@ -557,19 +557,49 @@ func MapBlock(bedrockName string, bedrockProps map[string]interface{}) JavaBlock
 
 	// Lectern
 	if shortName == "lectern" {
+		if val, ok := props["direction"]; ok {
+			if d, ok2 := repeaterDir[val]; ok2 {
+				props["facing"] = d
+			}
+			delete(props, "direction")
+		}
 		if val, ok := props["powered_bit"]; ok {
+			// Bedrock の powered_bit はページめくり時の一瞬の出力 = Java の powered
 			if val == "1" || val == "true" {
-				props["has_book"] = "true"
+				props["powered"] = "true"
 			} else {
-				props["has_book"] = "false"
+				props["powered"] = "false"
 			}
 			delete(props, "powered_bit")
+		}
+		if _, ok := props["facing"]; !ok {
+			props["facing"] = "north"
 		}
 		if _, ok := props["powered"]; !ok {
 			props["powered"] = "false"
 		}
 		if _, ok := props["has_book"]; !ok {
 			props["has_book"] = "false"
+		}
+	}
+
+	// Slabs（チャンカーマッピングで *_double_slab → *_slab にリネーム済みの場合がある）
+	if strings.HasSuffix(shortName, "_slab") {
+		if strings.Contains(bedrockName, "double_slab") {
+			props["type"] = "double"
+		} else if val, ok := props["top_slot_bit"]; ok {
+			if val == "1" || val == "true" {
+				props["type"] = "top"
+			} else {
+				props["type"] = "bottom"
+			}
+		}
+		delete(props, "top_slot_bit")
+		if _, ok := props["type"]; !ok {
+			props["type"] = "bottom"
+		}
+		if _, ok := props["waterlogged"]; !ok {
+			props["waterlogged"] = "false"
 		}
 	}
 
