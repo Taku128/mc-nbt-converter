@@ -1,6 +1,7 @@
 package mapping
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -11,8 +12,55 @@ import (
 
 // MappingTable is the shared shape of chunker-mappings.json and overrides.json.
 type MappingTable struct {
-	Names   map[string]string                       `json:"names"`
-	Flatten map[string]map[string]map[string]string `json:"flatten"`
+	Names   map[string]string       `json:"names"`
+	Flatten map[string]FlattenRules `json:"flatten"`
+}
+
+// FlattenRules preserves the JSON key order of one flatten entry.
+//
+// The JS implementation iterates rules in JSON order (Object.entries), and for
+// blocks with several state keys — e.g. minecraft:cauldron declares fill_level
+// before cauldron_liquid — that order decides which rule wins when the input
+// has both states. A plain Go map iterates in randomized order and picked a
+// different winner run-to-run (quartz_block measured 179/21 across 200 calls).
+type FlattenRules struct {
+	order []string
+	rules map[string]map[string]string
+}
+
+func (f *FlattenRules) UnmarshalJSON(b []byte) error {
+	// encoding/json の慣例: JSON null は no-op (素の map 型だった頃の挙動とも一致)。
+	if string(bytes.TrimSpace(b)) == "null" {
+		return nil
+	}
+	f.order = nil
+	f.rules = make(map[string]map[string]string)
+	dec := json.NewDecoder(bytes.NewReader(b))
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		return fmt.Errorf("flatten rules: expected JSON object")
+	}
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		key, ok := keyTok.(string)
+		if !ok {
+			return fmt.Errorf("flatten rules: expected string key")
+		}
+		var valueMap map[string]string
+		if err := dec.Decode(&valueMap); err != nil {
+			return err
+		}
+		f.order = append(f.order, key)
+		f.rules[key] = valueMap
+	}
+	_, err = dec.Token() // closing }
+	return err
 }
 
 type aliasesTable struct {
@@ -102,14 +150,15 @@ func recordUnmapped(name string) {
 }
 
 // lookupFlatten applies a flatten table. On hit, the consumed state key is removed from props.
-func lookupFlatten(flatten map[string]map[string]map[string]string, name string, props map[string]string) (string, bool) {
-	rules, ok := flatten[name]
+// Rules are evaluated in JSON declaration order (same as the JS implementation).
+func lookupFlatten(flatten map[string]FlattenRules, name string, props map[string]string) (string, bool) {
+	fr, ok := flatten[name]
 	if !ok {
 		return "", false
 	}
-	for stateKey, valueMap := range rules {
+	for _, stateKey := range fr.order {
 		if val, has := props[stateKey]; has {
-			if resolved, found := valueMap[val]; found {
+			if resolved, found := fr.rules[stateKey][val]; found {
 				delete(props, stateKey)
 				return resolved, true
 			}

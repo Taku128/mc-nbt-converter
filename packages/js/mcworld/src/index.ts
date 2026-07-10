@@ -9,7 +9,7 @@
 import AdmZip from 'adm-zip';
 // @ts-ignore — leveldb-zlib ships its own types but may be untyped in some versions
 import { LevelDB } from 'leveldb-zlib';
-import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -111,6 +111,10 @@ async function enumerateChunks(
     if (dim !== dimension) continue;
     const posKey = `${cx},${cz}`;
     if (tagByte === TAG_SUBCHUNK_PREFIX) {
+      // subchunk キーは Y バイト付きの len 10 (overworld) / 14 (他次元) のみ。
+      // 稀に tag 値 47 を持つ len 9/13 のキーがあると readInt8 が RangeError に
+      // なるため、browser 版 (chunk-scan.ts) と同じ長さ判定でスキップする。
+      if (len !== (isOverworld ? 10 : 14)) continue;
       const cy = isOverworld ? key.readInt8(9) : key.readInt8(13);
       if (!chunks.has(posKey)) chunks.set(posKey, { x: cx, z: cz, subchunks: new Set() });
       chunks.get(posKey)!.subchunks.add(cy);
@@ -135,12 +139,30 @@ export async function convertMcworld(
   const mcworldPath = resolve(inputPath);
   if (!existsSync(mcworldPath)) throw new Error(`File not found: ${mcworldPath}`);
 
+  // 一時ディレクトリと LevelDB ハンドルは例外経路でも必ず後始末する
+  // (従来は throw 時に tmpdir が残り db.close() も呼ばれずリークしていた)。
   const extractedDir = extractMcworld(mcworldPath);
-  const dbDir = findDbDir(extractedDir);
+  let db: InstanceType<typeof LevelDB> | null = null;
+  try {
+    const dbDir = findDbDir(extractedDir);
+    db = new LevelDB(dbDir);
+    await db.open();
+    return await convertOpenDb(db, opts);
+  } finally {
+    if (db) await db.close().catch(() => {});
+    try {
+      rmSync(extractedDir, { recursive: true, force: true });
+    } catch {
+      // 後始末のベストエフォート (close 失敗でハンドルが残る Windows 等)。
+      // ここで throw すると本来の結果や例外をマスクしてしまう。
+    }
+  }
+}
 
-  const db = new LevelDB(dbDir);
-  await db.open();
-
+async function convertOpenDb(
+  db: InstanceType<typeof LevelDB>,
+  opts: Required<ConvertMcworldOptions>,
+): Promise<ConvertResult> {
   const chunks = await enumerateChunks(db, opts.dimension);
 
   const minCX = Math.floor(opts.minX / 16);
@@ -155,7 +177,6 @@ export async function convertMcworld(
   );
 
   if (filtered.length === 0) {
-    await db.close();
     throw new Error('No chunks in specified range');
   }
 
@@ -233,8 +254,6 @@ export async function convertMcworld(
       }
     }
   }
-
-  await db.close();
 
   if (finalBlocks.length === 0) {
     throw new Error('No blocks found in specified range');
