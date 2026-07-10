@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"sort"
 
 	"github.com/Tnze/go-mc/nbt"
 )
@@ -43,9 +44,46 @@ type BlockPos struct {
 	State int32   `nbt:"state"`
 }
 
+// Props is a TAG_Compound of block-state properties. go-mc encodes plain maps
+// by iterating them in Go's randomized order, which made the output bytes
+// differ run-to-run for the same input. Marshal by hand with sorted keys so
+// the NBT is deterministic (and diffable / hashable).
+type Props map[string]string
+
+func (p Props) TagType() byte {
+	return 10 // TAG_Compound
+}
+
+func (p Props) MarshalNBT(w io.Writer) error {
+	keys := make([]string, 0, len(p))
+	for k := range p {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if err := writeStringTag(w, k, p[k]); err != nil {
+			return err
+		}
+	}
+	_, err := w.Write([]byte{0}) // TAG_End
+	return err
+}
+
+// writeStringTag writes a named TAG_String (id + name + value, big-endian lengths).
+func writeStringTag(w io.Writer, name, value string) error {
+	buf := make([]byte, 0, 5+len(name)+len(value))
+	buf = append(buf, 8) // TAG_String
+	buf = append(buf, byte(len(name)>>8), byte(len(name)))
+	buf = append(buf, name...)
+	buf = append(buf, byte(len(value)>>8), byte(len(value)))
+	buf = append(buf, value...)
+	_, err := w.Write(buf)
+	return err
+}
+
 type PaletteEntry struct {
-	Name       string            `nbt:"Name"`
-	Properties map[string]string `nbt:"Properties,omitempty"`
+	Name       string `nbt:"Name"`
+	Properties Props  `nbt:"Properties,omitempty"`
 }
 
 type Structure struct {
