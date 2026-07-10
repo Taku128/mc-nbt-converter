@@ -79,6 +79,7 @@ var (
 	overrides  MappingTable
 	aliases    aliasesTable
 	fallbacks  fallbacksTable
+	stateRules stateRulesTable
 	unmapped   = make(map[string]struct{})
 	unmappedMu sync.Mutex
 )
@@ -95,6 +96,9 @@ func init() {
 	}
 	if err := json.Unmarshal(data.Fallbacks, &fallbacks); err != nil {
 		fmt.Printf("Warning: failed to load fallbacks: %v\n", err)
+	}
+	if err := json.Unmarshal(data.StateRules, &stateRules); err != nil {
+		fmt.Printf("Warning: failed to load state rules: %v\n", err)
 	}
 }
 
@@ -219,19 +223,190 @@ var flipDir = map[string]string{
 	"east": "west", "west": "east",
 }
 
-var trapdoorDir = map[string]string{
-	"0": "east", "1": "west", "2": "south", "3": "north",
+// ---------------------------------------------------------------------------
+// data-driven state-rules engine (mirrors packages/js/core/src/block-mapping.ts).
+// The op arrays preserve JSON order via slices, so no custom UnmarshalJSON is
+// needed (unlike FlattenRules, which is a map).
+// ---------------------------------------------------------------------------
+
+// mapValue is a state-rules `map` value: either a string (set one key) or an
+// object (set several keys).
+type mapValue struct {
+	str   string
+	obj   map[string]string
+	isObj bool
 }
 
-// Bedrock `direction` (0-3) for repeater / comparator → Java `facing`.
-// Output side faces: 0=south, 1=west, 2=north, 3=east.
-var repeaterDir = map[string]string{
-	"0": "south", "1": "west", "2": "north", "3": "east",
+func (m *mapValue) UnmarshalJSON(b []byte) error {
+	b = bytes.TrimSpace(b)
+	if len(b) > 0 && b[0] == '"' {
+		return json.Unmarshal(b, &m.str)
+	}
+	m.isObj = true
+	return json.Unmarshal(b, &m.obj)
 }
 
-var railShape = map[string]string{
-	"0": "north_south", "1": "east_west", "2": "ascending_east",
-	"3": "ascending_west", "4": "ascending_north", "5": "ascending_south",
+type mapOp struct {
+	From         string              `json:"from"`
+	To           string              `json:"to"`
+	Default      string              `json:"default"`
+	KeepUnmapped bool                `json:"keepUnmapped"`
+	Values       map[string]mapValue `json:"values"`
+}
+type mapBoolOp struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Invert bool   `json:"invert"`
+}
+type renameOp struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+type wallVariantOp struct {
+	From     string `json:"from"`
+	Wall     string `json:"wall"`
+	Standing string `json:"standing"`
+	Flip     bool   `json:"flip"`
+}
+type stateOp struct {
+	Map         *mapOp            `json:"map"`
+	MapBool     *mapBoolOp        `json:"mapBool"`
+	Rename      *renameOp         `json:"rename"`
+	Set         map[string]string `json:"set"`
+	SetDefault  map[string]string `json:"setDefault"`
+	Drop        []string          `json:"drop"`
+	SetName     string            `json:"setName"`
+	WallVariant *wallVariantOp    `json:"wallVariant"`
+}
+type stateRule struct {
+	Match string    `json:"match"`
+	Ops   []stateOp `json:"ops"`
+}
+type stateRulesTable struct {
+	Common struct {
+		KeyAliases map[string]string `json:"keyAliases"`
+		Ops        []stateOp         `json:"ops"`
+		DropKeys   []string          `json:"dropKeys"`
+	} `json:"common"`
+	Rules []stateRule `json:"rules"`
+}
+
+func asBool(v string) bool { return v == "1" || v == "true" }
+
+// wildcardMatch: '*' matches any run of characters; no other metacharacters.
+func wildcardMatch(pattern, name string) bool {
+	if !strings.Contains(pattern, "*") {
+		return pattern == name
+	}
+	parts := strings.Split(pattern, "*")
+	idx := 0
+	for i, seg := range parts {
+		if seg == "" {
+			continue
+		}
+		if i == 0 {
+			if !strings.HasPrefix(name, seg) {
+				return false
+			}
+			idx = len(seg)
+		} else if i == len(parts)-1 {
+			return strings.HasSuffix(name[idx:], seg)
+		} else {
+			found := strings.Index(name[idx:], seg)
+			if found == -1 {
+				return false
+			}
+			idx += found + len(seg)
+		}
+	}
+	return true
+}
+
+// applyOp mutates props and returns the (possibly new) Java name.
+func applyOp(op stateOp, props map[string]string, name string) string {
+	switch {
+	case op.Rename != nil:
+		if v, ok := props[op.Rename.From]; ok {
+			props[op.Rename.To] = v
+			delete(props, op.Rename.From)
+		}
+	case op.Map != nil:
+		raw, ok := props[op.Map.From]
+		if !ok {
+			return name
+		}
+		if hit, found := op.Map.Values[raw]; found {
+			delete(props, op.Map.From)
+			if hit.isObj {
+				for k, v := range hit.obj {
+					props[k] = v
+				}
+			} else if op.Map.To != "" {
+				props[op.Map.To] = hit.str
+			}
+		} else if op.Map.KeepUnmapped {
+			if op.Map.To != "" && op.Map.To != op.Map.From {
+				props[op.Map.To] = raw
+				delete(props, op.Map.From)
+			}
+		} else if op.Map.Default != "" && op.Map.To != "" {
+			delete(props, op.Map.From)
+			props[op.Map.To] = op.Map.Default
+		}
+	case op.MapBool != nil:
+		if v, ok := props[op.MapBool.From]; ok {
+			b := asBool(v)
+			if op.MapBool.Invert {
+				b = !b
+			}
+			delete(props, op.MapBool.From)
+			if b {
+				props[op.MapBool.To] = "true"
+			} else {
+				props[op.MapBool.To] = "false"
+			}
+		}
+	case op.Set != nil:
+		for k, v := range op.Set {
+			props[k] = v
+		}
+	case op.SetDefault != nil:
+		for k, v := range op.SetDefault {
+			if _, ok := props[k]; !ok {
+				props[k] = v
+			}
+		}
+	case op.Drop != nil:
+		for _, k := range op.Drop {
+			delete(props, k)
+		}
+	case op.SetName != "":
+		return op.SetName
+	case op.WallVariant != nil:
+		dir, ok := props[op.WallVariant.From]
+		delete(props, op.WallVariant.From)
+		if ok && dir != "top" && dir != "unknown" && dir != "" {
+			if op.WallVariant.Flip {
+				if f, ok := flipDir[dir]; ok {
+					props["facing"] = f
+				} else {
+					props["facing"] = dir
+				}
+			} else {
+				props["facing"] = dir
+			}
+			return op.WallVariant.Wall
+		}
+		return op.WallVariant.Standing
+	}
+	return name
+}
+
+func applyOps(ops []stateOp, props map[string]string, name string) string {
+	for _, op := range ops {
+		name = applyOp(op, props, name)
+	}
+	return name
 }
 
 func parseString(val interface{}) string {
@@ -259,429 +434,44 @@ func MapBlock(bedrockName string, bedrockProps map[string]interface{}) JavaBlock
 		props[k] = parseString(v)
 	}
 
-	// 1. Normalize namespaced property keys
-	nsKeys := map[string]string{
-		"minecraft:cardinal_direction": "cardinal_direction",
-		"minecraft:facing_direction":   "mc_facing_direction",
-		"minecraft:vertical_half":      "vertical_half",
-		"minecraft:block_face":         "block_face",
-		"minecraft:pillar_axis":        "pillar_axis",
-	}
-	for ns, local := range nsKeys {
+	// Step 1: normalize namespaced property keys (common.keyAliases)
+	for ns, local := range stateRules.Common.KeyAliases {
 		if val, ok := props[ns]; ok {
 			props[local] = val
 			delete(props, ns)
 		}
 	}
 
-	// 2. Resolve Java name via 4-layer lookup (aliases → overrides → chunker → fallback)
+	// Step 2: resolve the Java name (4-layer). The rule match uses the
+	// alias-applied Bedrock name, which is also what resolveJavaName consumes.
+	matchName := bedrockName
+	if a, ok := aliases.BedrockAliases[bedrockName]; ok {
+		matchName = a
+	}
 	javaName, _ := resolveJavaName(bedrockName, props)
 
-	shortName := strings.TrimPrefix(javaName, "minecraft:")
+	// Step 3: common generic conversions
+	javaName = applyOps(stateRules.Common.Ops, props, javaName)
 
-	// 3. Convert basic properties
-	if val, ok := props["facing_direction"]; ok {
-		fMap := []string{"down", "up", "north", "south", "west", "east"}
-		if num, err := fmt.Sscanf(val, "%d", new(int)); err == nil && num == 1 {
-			var idx int
-			fmt.Sscanf(val, "%d", &idx)
-			if idx >= 0 && idx < 6 {
-				props["facing"] = fMap[idx]
-			}
-		} else {
-			props["facing"] = val
-		}
-		delete(props, "facing_direction")
-	}
-
-	if val, ok := props["mc_facing_direction"]; ok {
-		props["facing"] = val
-		delete(props, "mc_facing_direction")
-	}
-
-	if val, ok := props["cardinal_direction"]; ok {
-		props["facing"] = val
-		delete(props, "cardinal_direction")
-	}
-
-	if val, ok := props["pillar_axis"]; ok {
-		props["axis"] = val
-		delete(props, "pillar_axis")
-	}
-
-	if val, ok := props["vertical_half"]; ok {
-		if val == "top" {
-			props["type"] = "top"
-		} else {
-			props["type"] = "bottom"
-		}
-		delete(props, "vertical_half")
-	}
-
-	// 4. Block-specific logic
-	// Torches
-	if shortName == "redstone_wall_torch" || shortName == "redstone_torch" {
-		torchDir, hasDir := props["torch_facing_direction"]
-		delete(props, "torch_facing_direction")
-		isLit := !strings.Contains(bedrockName, "unlit")
-
-		if hasDir && torchDir != "top" && torchDir != "unknown" {
-			javaName = "minecraft:redstone_wall_torch"
-			if flip, ok := flipDir[torchDir]; ok {
-				props["facing"] = flip
-			} else {
-				props["facing"] = torchDir
-			}
-		} else {
-			javaName = "minecraft:redstone_torch"
-		}
-		if isLit {
-			props["lit"] = "true"
-		} else {
-			props["lit"] = "false"
+	// Step 4: first matching per-block rule (declaration order)
+	for _, rule := range stateRules.Rules {
+		if wildcardMatch(rule.Match, matchName) {
+			javaName = applyOps(rule.Ops, props, javaName)
+			break
 		}
 	}
 
-	if shortName == "wall_torch" || shortName == "torch" {
-		torchDir, hasDir := props["torch_facing_direction"]
-		delete(props, "torch_facing_direction")
-		if hasDir && torchDir != "top" && torchDir != "unknown" {
-			javaName = "minecraft:wall_torch"
-			if flip, ok := flipDir[torchDir]; ok {
-				props["facing"] = flip
-			} else {
-				props["facing"] = torchDir
-			}
-		} else {
-			javaName = "minecraft:torch"
-		}
-	}
-
-	if shortName == "soul_wall_torch" || shortName == "soul_torch" {
-		torchDir, hasDir := props["torch_facing_direction"]
-		delete(props, "torch_facing_direction")
-		if hasDir && torchDir != "top" && torchDir != "unknown" {
-			javaName = "minecraft:soul_wall_torch"
-			if flip, ok := flipDir[torchDir]; ok {
-				props["facing"] = flip
-			} else {
-				props["facing"] = torchDir
-			}
-		} else {
-			javaName = "minecraft:soul_torch"
-		}
-	}
-
-	// Pistons
-	if shortName == "piston_head" || shortName == "piston_arm_collision" {
-		javaName = "minecraft:piston_head"
-		if strings.Contains(bedrockName, "sticky") {
-			props["type"] = "sticky"
-		} else if _, ok := props["type"]; !ok {
-			props["type"] = "normal"
-		}
-		if _, ok := props["short"]; !ok {
-			props["short"] = "false"
-		}
-		if flip, ok := flipDir[props["facing"]]; ok {
-			props["facing"] = flip
-		}
-	}
-
-	if shortName == "piston" || shortName == "sticky_piston" {
-		if _, ok := props["extended"]; !ok {
-			props["extended"] = "false"
-		}
-		if flip, ok := flipDir[props["facing"]]; ok {
-			props["facing"] = flip
-		}
-	}
-
-	// Comparator
-	if shortName == "comparator" {
-		if val, ok := props["output_subtract_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["mode"] = "subtract"
-			} else {
-				props["mode"] = "compare"
-			}
-			delete(props, "output_subtract_bit")
-		} else if _, ok := props["mode"]; !ok {
-			props["mode"] = "compare"
-		}
-		if val, ok := props["output_lit_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["powered"] = "true"
-			} else {
-				props["powered"] = "false"
-			}
-			delete(props, "output_lit_bit")
-		} else {
-			if bedrockName == "minecraft:powered_comparator" {
-				props["powered"] = "true"
-			} else {
-				props["powered"] = "false"
-			}
-		}
-		if val, ok := props["direction"]; ok {
-			if d, ok2 := repeaterDir[val]; ok2 {
-				props["facing"] = d
-			}
-			delete(props, "direction")
-		}
-		if _, ok := props["facing"]; !ok {
-			props["facing"] = "north"
-		}
-	}
-
-	// Repeater
-	if shortName == "repeater" {
-		if bedrockName == "minecraft:powered_repeater" {
-			props["powered"] = "true"
-		} else {
-			props["powered"] = "false"
-		}
-		if val, ok := props["repeater_delay"]; ok {
-			var delay int
-			fmt.Sscanf(val, "%d", &delay)
-			props["delay"] = fmt.Sprintf("%d", delay+1)
-			delete(props, "repeater_delay")
-		} else if _, ok := props["delay"]; !ok {
-			props["delay"] = "1"
-		}
-		if _, ok := props["locked"]; !ok {
-			props["locked"] = "false"
-		}
-		if val, ok := props["direction"]; ok {
-			if d, ok2 := repeaterDir[val]; ok2 {
-				props["facing"] = d
-			}
-			delete(props, "direction")
-		}
-		if _, ok := props["facing"]; !ok {
-			props["facing"] = "north"
-		}
-	}
-
-	// Observer
-	if shortName == "observer" {
-		if val, ok := props["powered_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["powered"] = "true"
-			} else {
-				props["powered"] = "false"
-			}
-			delete(props, "powered_bit")
-		} else if _, ok := props["powered"]; !ok {
-			props["powered"] = "false"
-		}
-	}
-
-	// Button
-	if strings.Contains(shortName, "button") {
-		if val, ok := props["button_pressed_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["powered"] = "true"
-			} else {
-				props["powered"] = "false"
-			}
-			delete(props, "button_pressed_bit")
-		}
-		if f, ok := props["facing"]; ok {
-			if f == "down" {
-				props["face"] = "ceiling"
-				props["facing"] = "north"
-			} else if f == "up" {
-				props["face"] = "floor"
-				props["facing"] = "north"
-			} else {
-				props["face"] = "wall"
-			}
-		}
-	}
-
-	// Barrel
-	if shortName == "barrel" {
-		if val, ok := props["open_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["open"] = "true"
-			} else {
-				props["open"] = "false"
-			}
-			delete(props, "open_bit")
-		} else if _, ok := props["open"]; !ok {
-			props["open"] = "false"
-		}
-	}
-
-	// Dropper/Dispenser
-	if shortName == "dropper" || shortName == "dispenser" {
-		if val, ok := props["triggered_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["triggered"] = "true"
-			} else {
-				props["triggered"] = "false"
-			}
-			delete(props, "triggered_bit")
-		}
-	}
-
-	// Hopper
-	if shortName == "hopper" {
-		if val, ok := props["toggle_bit"]; ok {
-			if val == "0" || val == "false" {
-				props["enabled"] = "true"
-			} else {
-				props["enabled"] = "false"
-			}
-			delete(props, "toggle_bit")
-		}
-	}
-
-	// Trapdoor
-	if strings.Contains(shortName, "trapdoor") {
-		if val, ok := props["direction"]; ok {
-			if rm, ok := trapdoorDir[val]; ok {
-				props["facing"] = rm
-			} else {
-				props["facing"] = "north"
-			}
-			delete(props, "direction")
-		}
-		if val, ok := props["upside_down_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["half"] = "top"
-			} else {
-				props["half"] = "bottom"
-			}
-			delete(props, "upside_down_bit")
-		}
-		if val, ok := props["open_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["open"] = "true"
-			} else {
-				props["open"] = "false"
-			}
-			delete(props, "open_bit")
-		}
-		if _, ok := props["open"]; !ok {
-			props["open"] = "false"
-		}
-		if _, ok := props["half"]; !ok {
-			props["half"] = "bottom"
-		}
-		if _, ok := props["waterlogged"]; !ok {
-			props["waterlogged"] = "false"
-		}
-		if _, ok := props["powered"]; !ok {
-			props["powered"] = "false"
-		}
-	}
-
-	// Rails
-	if shortName == "powered_rail" || shortName == "activator_rail" || shortName == "detector_rail" {
-		if val, ok := props["rail_direction"]; ok {
-			if rs, ok := railShape[val]; ok {
-				props["shape"] = rs
-			} else {
-				props["shape"] = "north_south"
-			}
-			delete(props, "rail_direction")
-		}
-		if val, ok := props["rail_data_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["powered"] = "true"
-			} else {
-				props["powered"] = "false"
-			}
-			delete(props, "rail_data_bit")
-		}
-		if _, ok := props["powered"]; !ok {
-			props["powered"] = "false"
-		}
-		if _, ok := props["waterlogged"]; !ok {
-			props["waterlogged"] = "false"
-		}
-	}
-
-	// Lectern
-	if shortName == "lectern" {
-		if val, ok := props["direction"]; ok {
-			if d, ok2 := repeaterDir[val]; ok2 {
-				props["facing"] = d
-			}
-			delete(props, "direction")
-		}
-		if val, ok := props["powered_bit"]; ok {
-			// Bedrock の powered_bit はページめくり時の一瞬の出力 = Java の powered
-			if val == "1" || val == "true" {
-				props["powered"] = "true"
-			} else {
-				props["powered"] = "false"
-			}
-			delete(props, "powered_bit")
-		}
-		if _, ok := props["facing"]; !ok {
-			props["facing"] = "north"
-		}
-		if _, ok := props["powered"]; !ok {
-			props["powered"] = "false"
-		}
-		if _, ok := props["has_book"]; !ok {
-			props["has_book"] = "false"
-		}
-	}
-
-	// Slabs（チャンカーマッピングで *_double_slab → *_slab にリネーム済みの場合がある）
-	if strings.HasSuffix(shortName, "_slab") {
-		if strings.Contains(bedrockName, "double_slab") {
-			props["type"] = "double"
-		} else if val, ok := props["top_slot_bit"]; ok {
-			if val == "1" || val == "true" {
-				props["type"] = "top"
-			} else {
-				props["type"] = "bottom"
-			}
-		}
-		delete(props, "top_slot_bit")
-		if _, ok := props["type"]; !ok {
-			props["type"] = "bottom"
-		}
-		if _, ok := props["waterlogged"]; !ok {
-			props["waterlogged"] = "false"
-		}
-	}
-
-	// Redstone wire
-	if shortName == "redstone_wire" {
-		if val, ok := props["redstone_signal"]; ok {
-			props["power"] = val
-			delete(props, "redstone_signal")
-		}
-		if _, ok := props["east"]; !ok {
-			props["east"] = "none"
-		}
-		if _, ok := props["north"]; !ok {
-			props["north"] = "none"
-		}
-		if _, ok := props["south"]; !ok {
-			props["south"] = "none"
-		}
-		if _, ok := props["west"]; !ok {
-			props["west"] = "none"
-		}
-		if _, ok := props["power"]; !ok {
-			props["power"] = "0"
-		}
-	}
-
-	// Filter metadata keys
+	// Step 5: final cleanup (common.dropKeys)
 	finalProps := make(map[string]string)
 	for k, v := range props {
-		if strings.Contains(k, "update") || k == "age_bit" || k == "age" {
-			continue
+		drop := false
+		for _, pat := range stateRules.Common.DropKeys {
+			if wildcardMatch(pat, k) {
+				drop = true
+				break
+			}
 		}
-		if strings.HasPrefix(k, "minecraft:") {
+		if drop {
 			continue
 		}
 		finalProps[k] = v

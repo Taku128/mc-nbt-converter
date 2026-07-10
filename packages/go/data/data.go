@@ -13,3 +13,6 @@ var Aliases []byte
 
 //go:embed fallbacks.json
 var Fallbacks []byte
+
+//go:embed state-rules.json
+var StateRules []byte

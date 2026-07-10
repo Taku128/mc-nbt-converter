@@ -25,7 +25,8 @@ const targets = [
 
 const checkMode = process.argv.includes('--check');
 
-const jsonFiles = readdirSync(sharedDir).filter((f) => f.endsWith('.json'));
+// *.schema.json is documentation only (not embedded/imported); keep it out of data/.
+const jsonFiles = readdirSync(sharedDir).filter((f) => f.endsWith('.json') && !f.endsWith('.schema.json'));
 if (jsonFiles.length === 0) {
   console.error(`No JSON files found in ${sharedDir}`);
   process.exit(1);

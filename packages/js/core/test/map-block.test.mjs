@@ -1,11 +1,9 @@
 /**
- * mapBlock のブロック族別テーブルテスト。
+ * mapBlock のブロック族別テーブルテスト (データ駆動 state-rules.json の回帰基準)。
  *
- * 期待値は block-mapping.ts の現行実装 + shared/mappings の JSON から導出した
- * 「現状の挙動」の回帰基準。lever / 階段 / ドア / 通常レール等の素通し
- * (Java 不正 state になる既知の未対応) も現状のまま固定して文書化している —
- * Phase 2 (プロパティ変換のデータ駆動化, redtact-com/redtact#14) で変換を
- * 実装した際は、素通しセクションの期待値をあるべき Java state に更新すること。
+ * 期待値は GeyserMC/mappings (Java 1.21.11) と実 .mcstructure palette から検証した
+ * 正しい Java state。lever / 階段 / ドア / 通常レール等は Phase 2 で変換を実装済み
+ * (redtact-com/redtact#14)。Go 実装 (packages/go) との一致は tests/golden が担保する。
  */
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
@@ -174,9 +172,9 @@ const CASES = [
     out: { name: "minecraft:chiseled_quartz_block", properties: { axis: "y" } },
   },
   {
-    name: "flatten: cauldron は fill_level=0 が cauldron_liquid より先に解決 (JSON 順)",
+    name: "flatten: cauldron は fill_level=0 で空 cauldron、cauldron_liquid 残渣は drop",
     in: ["minecraft:cauldron", { fill_level: 0, cauldron_liquid: "water" }],
-    out: { name: "minecraft:cauldron", properties: { cauldron_liquid: "water" } },
+    out: { name: "minecraft:cauldron", properties: {} },
   },
   {
     name: "flatten: kelp は kelp_age=25 で kelp_plant",
@@ -184,27 +182,115 @@ const CASES = [
     out: { name: "minecraft:kelp_plant", properties: {} },
   },
 
-  // --- 素通しの既知ケース (Phase 2 のデータ駆動化で変換予定。現状固定) ---
+  // --- Phase 2 新規: 向き付きブロックの変換 (GeyserMC 1.21.11 検証済み) ---
   {
-    name: "【素通し】lever: lever_direction/open_bit が Java state に変換されない",
+    // redtact の patchBedrockStates (structureLoader.ts) と同一の入出力
+    name: "lever: up_north_south + open_bit=1 → floor/north/powered (redtact patch 相当)",
     in: ["minecraft:lever", { lever_direction: "up_north_south", open_bit: 1 }],
-    out: {
-      name: "minecraft:lever",
-      properties: { lever_direction: "up_north_south", open_bit: "1" },
-    },
+    out: { name: "minecraft:lever", properties: { powered: "true", face: "floor", facing: "north" } },
   },
   {
-    name: "【素通し】oak_stairs: weirdo_direction が変換されない",
+    name: "lever: 壁付き east + open_bit=0",
+    in: ["minecraft:lever", { lever_direction: "east", open_bit: 0 }],
+    out: { name: "minecraft:lever", properties: { powered: "false", face: "wall", facing: "east" } },
+  },
+  {
+    name: "lever: down_east_west → ceiling/east",
+    in: ["minecraft:lever", { lever_direction: "down_east_west", open_bit: 1 }],
+    out: { name: "minecraft:lever", properties: { powered: "true", face: "ceiling", facing: "east" } },
+  },
+  {
+    name: "oak_stairs: weirdo_direction=2 → facing=south, 既定 shape/half/waterlogged",
     in: ["minecraft:oak_stairs", { weirdo_direction: 2, upside_down_bit: 0 }],
     out: {
       name: "minecraft:oak_stairs",
-      properties: { weirdo_direction: "2", upside_down_bit: "0" },
+      properties: { facing: "south", half: "bottom", shape: "straight", waterlogged: "false" },
     },
   },
   {
-    name: "【素通し】通常レール: rail_direction が shape に変換されない",
+    name: "oak_stairs: upside_down_bit=1 → half=top",
+    in: ["minecraft:oak_stairs", { weirdo_direction: 3, upside_down_bit: 1 }],
+    out: {
+      name: "minecraft:oak_stairs",
+      properties: { facing: "north", half: "top", shape: "straight", waterlogged: "false" },
+    },
+  },
+  {
+    name: "通常レール: rail_direction=7 → shape=south_west (カーブ)",
     in: ["minecraft:rail", { rail_direction: 7 }],
-    out: { name: "minecraft:rail", properties: { rail_direction: "7" } },
+    out: { name: "minecraft:rail", properties: { shape: "south_west", waterlogged: "false" } },
+  },
+  {
+    name: "通常レール: rail_direction=0 → north_south",
+    in: ["minecraft:rail", { rail_direction: 0 }],
+    out: { name: "minecraft:rail", properties: { shape: "north_south", waterlogged: "false" } },
+  },
+  {
+    // 現代 Bedrock (1.21) のドアは minecraft:cardinal_direction を使う。90° 回転が必要。
+    name: "door: cardinal_direction=east → facing=north (90° 回転) + hinge/half/open",
+    in: [
+      "minecraft:wooden_door",
+      { "minecraft:cardinal_direction": "east", open_bit: 1, upper_block_bit: 0, door_hinge_bit: 1 },
+    ],
+    out: {
+      name: "minecraft:oak_door",
+      properties: { facing: "north", open: "true", half: "lower", hinge: "right", powered: "false" },
+    },
+  },
+  {
+    name: "door: cardinal_direction=north → facing=west, upper_block_bit=1 → half=upper",
+    in: [
+      "minecraft:spruce_door",
+      { "minecraft:cardinal_direction": "north", open_bit: 0, upper_block_bit: 1, door_hinge_bit: 0 },
+    ],
+    out: {
+      name: "minecraft:spruce_door",
+      properties: { facing: "west", open: "false", half: "upper", hinge: "left", powered: "false" },
+    },
+  },
+  {
+    name: "tripwire_hook: direction=2 → facing=north + attached/powered",
+    in: ["minecraft:tripwire_hook", { direction: 2, attached_bit: 1, powered_bit: 0 }],
+    out: {
+      name: "minecraft:tripwire_hook",
+      properties: { facing: "north", attached: "true", powered: "false" },
+    },
+  },
+  {
+    name: "daylight_detector_inverted: redstone_signal → power, inverted=true",
+    in: ["minecraft:daylight_detector_inverted", { redstone_signal: 9 }],
+    out: { name: "minecraft:daylight_detector", properties: { power: "9", inverted: "true" } },
+  },
+  {
+    name: "daylight_detector: inverted=false 既定",
+    in: ["minecraft:daylight_detector", { redstone_signal: 3 }],
+    out: { name: "minecraft:daylight_detector", properties: { power: "3", inverted: "false" } },
+  },
+  {
+    name: "sculk_sensor: phase=1 → active, power/waterlogged 既定",
+    in: ["minecraft:sculk_sensor", { sculk_sensor_phase: 1 }],
+    out: {
+      name: "minecraft:sculk_sensor",
+      properties: { sculk_sensor_phase: "active", power: "0", waterlogged: "false" },
+    },
+  },
+  {
+    name: "crafter: orientation 素通し + triggered/crafting",
+    in: ["minecraft:crafter", { orientation: "down_east", triggered_bit: 1, crafting: 0 }],
+    out: {
+      name: "minecraft:crafter",
+      properties: { orientation: "down_east", triggered: "true", crafting: "false" },
+    },
+  },
+  {
+    name: "redstone_lamp: 未点灯は lit=false 補完 (redtact patch 相当)",
+    in: ["minecraft:redstone_lamp", {}],
+    out: { name: "minecraft:redstone_lamp", properties: { lit: "false" } },
+  },
+  {
+    name: "lit_redstone_lamp: lit=true",
+    in: ["minecraft:lit_redstone_lamp", {}],
+    out: { name: "minecraft:redstone_lamp", properties: { lit: "true" } },
   },
 ];
 
@@ -215,11 +301,16 @@ for (const c of CASES) {
   });
 }
 
-test("wooden_door は names 層で oak_door にリネームされる (プロパティは素通し)", () => {
-  const got = mapBlock("minecraft:wooden_door", { direction: 1, open_bit: 0, upper_block_bit: 0 });
+test("wooden_door は names 層で oak_door にリネームされる", () => {
+  const got = mapBlock("minecraft:wooden_door", {
+    "minecraft:cardinal_direction": "south",
+    open_bit: 0,
+    upper_block_bit: 0,
+    door_hinge_bit: 0,
+  });
   assert.equal(got.name, "minecraft:oak_door");
-  // 素通し (Phase 2 で door 変換を実装したら更新)
-  assert.equal(got.properties.direction, "1");
+  // cardinal_direction=south → facing=east (90° 回転)
+  assert.equal(got.properties.facing, "east");
 });
 
 test("決定性: flatten を含む変換 200 回が単一結果になる", () => {
