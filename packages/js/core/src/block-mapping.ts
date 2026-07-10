@@ -2,16 +2,23 @@
  * Bedrock → Java block mapping.
  *
  * Name resolution uses a 4-layer lookup (aliases → overrides → chunker → fallbacks).
- * Block-specific property conversions (torches, pistons, repeaters, redstone wire, etc.)
- * are applied afterwards.
+ * Block-state property conversions are DATA-DRIVEN: shared/mappings/state-rules.json
+ * declares a `common` pass (generic key conversions) plus per-block `rules`, applied
+ * by a small op engine. Rules match on the alias-applied Bedrock name (first match in
+ * declaration order wins). This keeps the JS and Go implementations reading the same
+ * JSON instead of duplicating hand-written branches.
  *
- * Mapping JSON is inlined at build time so this module works in browsers
- * without any fs access.
+ * Neighbour-dependent state (redstone_wire connections, piston `extended` resolved from
+ * the actual adjacent block) stays in post-process.ts — it is out of scope for a
+ * per-block rule table.
+ *
+ * Mapping JSON is inlined at build time so this module works in browsers without fs.
  */
 import chunker from '../data/chunker-mappings.json' with { type: 'json' };
 import overrides from '../data/overrides.json' with { type: 'json' };
 import aliasesData from '../data/aliases.json' with { type: 'json' };
 import fallbacks from '../data/fallbacks.json' with { type: 'json' };
+import stateRulesData from '../data/state-rules.json' with { type: 'json' };
 
 export interface JavaBlockState {
   name: string;
@@ -34,21 +41,31 @@ interface FallbacksTable {
   logUnmapped?: boolean;
 }
 
+// --- state-rules.json shapes ---
+type MapValue = string | Record<string, string>;
+interface Op {
+  map?: { from: string; to?: string; default?: string; keepUnmapped?: boolean; values: Record<string, MapValue> };
+  mapBool?: { from: string; to: string; invert?: boolean };
+  rename?: { from: string; to: string };
+  set?: Record<string, string>;
+  setDefault?: Record<string, string>;
+  drop?: string[];
+  setName?: string;
+  wallVariant?: { from: string; wall: string; standing: string; flip?: boolean };
+}
+interface StateRules {
+  common: { keyAliases?: Record<string, string>; ops?: Op[]; dropKeys?: string[] };
+  rules: { match: string; ops: Op[] }[];
+}
+
 const CHUNKER = chunker as MappingTable;
 const OVERRIDES = overrides as MappingTable;
 const ALIASES = aliasesData as AliasesTable;
 const FALLBACKS = fallbacks as FallbacksTable;
+const STATE_RULES = stateRulesData as StateRules;
 
 const FLIP_DIR: Record<string, string> = {
   north: 'south', south: 'north', east: 'west', west: 'east',
-};
-const TRAPDOOR_DIR = ['east', 'west', 'south', 'north'];
-// Bedrock `direction` (0-3) for repeater / comparator → Java `facing`.
-// Output side faces: 0=south, 1=west, 2=north, 3=east.
-const REPEATER_DIR = ['south', 'west', 'north', 'east'];
-const RAIL_SHAPE: Record<string, string> = {
-  '0': 'north_south', '1': 'east_west', '2': 'ascending_east',
-  '3': 'ascending_west', '4': 'ascending_north', '5': 'ascending_south',
 };
 
 const unmappedSet = new Set<string>();
@@ -87,9 +104,6 @@ function resolveJavaName(
   bedrockName: string,
   props: Record<string, string>,
 ): string {
-  const aliased = ALIASES.bedrockAliases?.[bedrockName];
-  if (aliased) bedrockName = aliased;
-
   const o = lookupFlatten(OVERRIDES.flatten, bedrockName, props);
   if (o) return o;
   if (OVERRIDES.names?.[bedrockName]) return OVERRIDES.names[bedrockName];
@@ -110,6 +124,109 @@ function resolveJavaName(
   return FALLBACKS.defaultBlock ?? 'minecraft:stone';
 }
 
+// ---------------------------------------------------------------------------
+// data-driven op engine
+// ---------------------------------------------------------------------------
+
+const asBool = (v: string): boolean => v === '1' || v === 'true';
+
+/** Wildcard match: '*' matches any run of characters. No other metacharacters. */
+function wildcardMatch(pattern: string, name: string): boolean {
+  if (!pattern.includes('*')) return pattern === name;
+  const parts = pattern.split('*');
+  let idx = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const seg = parts[i]!;
+    if (seg === '') continue;
+    if (i === 0) {
+      if (!name.startsWith(seg)) return false;
+      idx = seg.length;
+    } else if (i === parts.length - 1) {
+      return name.slice(idx).endsWith(seg);
+    } else {
+      const found = name.indexOf(seg, idx);
+      if (found === -1) return false;
+      idx = found + seg.length;
+    }
+  }
+  return true;
+}
+
+/** Applies one op to the mutable state (props + name). Returns the (possibly new) name. */
+function applyOp(op: Op, props: Record<string, string>, name: string): string {
+  if (op.rename) {
+    const { from, to } = op.rename;
+    if (props[from] !== undefined) {
+      props[to] = props[from]!;
+      delete props[from];
+    }
+    return name;
+  }
+  if (op.map) {
+    const { from, to, values, keepUnmapped, default: def } = op.map;
+    const raw = props[from];
+    if (raw === undefined) return name;
+    const hit = values[raw];
+    if (hit !== undefined) {
+      delete props[from];
+      if (typeof hit === 'string') {
+        if (to) props[to] = hit;
+      } else {
+        for (const [k, v] of Object.entries(hit)) props[k] = v;
+      }
+    } else if (keepUnmapped) {
+      if (to && to !== from) {
+        props[to] = raw;
+        delete props[from];
+      }
+      // to omitted or to === from: leave raw in place
+    } else if (def !== undefined && to) {
+      delete props[from];
+      props[to] = def;
+    }
+    return name;
+  }
+  if (op.mapBool) {
+    const { from, to, invert } = op.mapBool;
+    if (props[from] !== undefined) {
+      let b = asBool(props[from]!);
+      if (invert) b = !b;
+      delete props[from];
+      props[to] = b ? 'true' : 'false';
+    }
+    return name;
+  }
+  if (op.set) {
+    for (const [k, v] of Object.entries(op.set)) props[k] = v;
+    return name;
+  }
+  if (op.setDefault) {
+    for (const [k, v] of Object.entries(op.setDefault)) if (props[k] === undefined) props[k] = v;
+    return name;
+  }
+  if (op.drop) {
+    for (const k of op.drop) delete props[k];
+    return name;
+  }
+  if (op.setName) return op.setName;
+  if (op.wallVariant) {
+    const { from, wall, standing, flip } = op.wallVariant;
+    const dir = props[from];
+    delete props[from];
+    if (dir && dir !== 'top' && dir !== 'unknown') {
+      props.facing = flip ? (FLIP_DIR[dir] ?? dir) : dir;
+      return wall;
+    }
+    return standing;
+  }
+  return name;
+}
+
+function applyOps(ops: Op[], props: Record<string, string>, name: string): string {
+  for (const op of ops) name = applyOp(op, props, name);
+  return name;
+}
+
 /**
  * Map a Bedrock block name + properties to Java-compatible format.
  */
@@ -122,292 +239,36 @@ export function mapBlock(
     props[k] = typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v);
   }
 
-  // Step 1: Normalize namespaced property keys
-  const nsKeys: Record<string, string> = {
-    'minecraft:cardinal_direction': 'cardinal_direction',
-    'minecraft:facing_direction': 'mc_facing_direction',
-    'minecraft:vertical_half': 'vertical_half',
-    'minecraft:block_face': 'block_face',
-  };
-  for (const [ns, local] of Object.entries(nsKeys)) {
+  // Step 1: normalize namespaced property keys (common.keyAliases)
+  const keyAliases = STATE_RULES.common.keyAliases ?? {};
+  for (const [ns, local] of Object.entries(keyAliases)) {
     if (props[ns] !== undefined) {
-      props[local] = props[ns];
+      props[local] = props[ns]!;
       delete props[ns];
     }
   }
 
-  // Step 2: Resolve Java name via 4-layer lookup
-  let javaName = resolveJavaName(bedrockName, props);
-  let shortName = javaName.replace('minecraft:', '');
+  // Step 2: resolve the Java name (4-layer). The rule match uses the alias-applied
+  // Bedrock name, which is also what resolveJavaName consumes.
+  const matchName = ALIASES.bedrockAliases?.[bedrockName] ?? bedrockName;
+  let javaName = resolveJavaName(matchName, props);
 
-  // Step 3: Basic property conversions
+  // Step 3: common generic conversions
+  javaName = applyOps(STATE_RULES.common.ops ?? [], props, javaName);
 
-  if (props.facing_direction !== undefined) {
-    const fMap = ['down', 'up', 'north', 'south', 'west', 'east'];
-    const n = Number(props.facing_direction);
-    props.facing = Number.isFinite(n) ? fMap[Math.min(5, Math.max(0, n))]! : String(props.facing_direction);
-    delete props.facing_direction;
-  }
-
-  if (props.mc_facing_direction !== undefined) {
-    props.facing = String(props.mc_facing_direction);
-    delete props.mc_facing_direction;
-  }
-
-  if (props.cardinal_direction !== undefined) {
-    props.facing = String(props.cardinal_direction);
-    delete props.cardinal_direction;
-  }
-
-  if (props.pillar_axis !== undefined) {
-    props.axis = props.pillar_axis;
-    delete props.pillar_axis;
-  }
-
-  if (props.vertical_half !== undefined) {
-    props.type = props.vertical_half === 'top' ? 'top' : 'bottom';
-    delete props.vertical_half;
-  }
-
-  // Step 4: Block-specific conversions
-
-  // Redstone torch: wall vs standing, direction INVERTED
-  if (shortName === 'redstone_wall_torch' || shortName === 'redstone_torch') {
-    const torchDir = props.torch_facing_direction;
-    delete props.torch_facing_direction;
-    const isLit = !bedrockName.includes('unlit');
-
-    if (torchDir && torchDir !== 'top' && torchDir !== 'unknown') {
-      javaName = 'minecraft:redstone_wall_torch';
-      props.facing = FLIP_DIR[torchDir] ?? torchDir;
-    } else {
-      javaName = 'minecraft:redstone_torch';
-    }
-    props.lit = isLit ? 'true' : 'false';
-    shortName = javaName.replace('minecraft:', '');
-  }
-
-  // Regular torch
-  if (shortName === 'wall_torch' || shortName === 'torch') {
-    const torchDir = props.torch_facing_direction;
-    delete props.torch_facing_direction;
-
-    if (torchDir && torchDir !== 'top' && torchDir !== 'unknown') {
-      javaName = 'minecraft:wall_torch';
-      props.facing = FLIP_DIR[torchDir] ?? torchDir;
-    } else {
-      javaName = 'minecraft:torch';
-    }
-    shortName = javaName.replace('minecraft:', '');
-  }
-
-  // Soul torch
-  if (shortName === 'soul_wall_torch' || shortName === 'soul_torch') {
-    const torchDir = props.torch_facing_direction;
-    delete props.torch_facing_direction;
-
-    if (torchDir && torchDir !== 'top' && torchDir !== 'unknown') {
-      javaName = 'minecraft:soul_wall_torch';
-      props.facing = FLIP_DIR[torchDir] ?? torchDir;
-    } else {
-      javaName = 'minecraft:soul_torch';
-    }
-    shortName = javaName.replace('minecraft:', '');
-  }
-
-  // Piston head
-  if (shortName === 'piston_head' || shortName === 'piston_arm_collision') {
-    javaName = 'minecraft:piston_head';
-    shortName = 'piston_head';
-    if (bedrockName.includes('sticky')) props.type = 'sticky';
-    else if (!props.type) props.type = 'normal';
-    if (!props.short) props.short = 'false';
-    if (['north', 'south', 'east', 'west'].includes(props.facing ?? '')) {
-      props.facing = FLIP_DIR[props.facing]!;
+  // Step 4: first matching per-block rule (declaration order)
+  for (const rule of STATE_RULES.rules) {
+    if (wildcardMatch(rule.match, matchName)) {
+      javaName = applyOps(rule.ops, props, javaName);
+      break;
     }
   }
 
-  // Piston / Sticky Piston
-  if (shortName === 'piston' || shortName === 'sticky_piston') {
-    if (props.extended === undefined) props.extended = 'false';
-    if (['north', 'south', 'east', 'west'].includes(props.facing ?? '')) {
-      props.facing = FLIP_DIR[props.facing]!;
-    }
-  }
-
-  // Comparator
-  if (shortName === 'comparator') {
-    if (props.output_subtract_bit !== undefined) {
-      props.mode = (props.output_subtract_bit === '1' || props.output_subtract_bit === 'true') ? 'subtract' : 'compare';
-      delete props.output_subtract_bit;
-    } else if (!props.mode) {
-      props.mode = 'compare';
-    }
-    if (props.output_lit_bit !== undefined) {
-      props.powered = (props.output_lit_bit === '1' || props.output_lit_bit === 'true') ? 'true' : 'false';
-      delete props.output_lit_bit;
-    } else {
-      props.powered = (bedrockName === 'minecraft:powered_comparator') ? 'true' : 'false';
-    }
-    if (props.direction !== undefined) {
-      const idx = Number(props.direction);
-      if (Number.isInteger(idx) && idx >= 0 && idx < 4) props.facing = REPEATER_DIR[idx]!;
-      delete props.direction;
-    }
-    if (!props.facing) props.facing = 'north';
-  }
-
-  // Repeater
-  if (shortName === 'repeater') {
-    props.powered = (bedrockName === 'minecraft:powered_repeater') ? 'true' : 'false';
-    if (props.repeater_delay !== undefined) {
-      props.delay = String(Number(props.repeater_delay) + 1);
-      delete props.repeater_delay;
-    } else if (!props.delay) {
-      props.delay = '1';
-    }
-    if (!props.locked) props.locked = 'false';
-    if (props.direction !== undefined) {
-      const idx = Number(props.direction);
-      if (Number.isInteger(idx) && idx >= 0 && idx < 4) props.facing = REPEATER_DIR[idx]!;
-      delete props.direction;
-    }
-    if (!props.facing) props.facing = 'north';
-  }
-
-  // Observer
-  if (shortName === 'observer') {
-    if (props.powered_bit !== undefined) {
-      props.powered = (props.powered_bit === '1' || props.powered_bit === 'true') ? 'true' : 'false';
-      delete props.powered_bit;
-    } else if (props.powered === undefined) {
-      props.powered = 'false';
-    }
-  }
-
-  // Button
-  if (shortName.includes('button')) {
-    if (props.button_pressed_bit !== undefined) {
-      props.powered = (props.button_pressed_bit === '1' || props.button_pressed_bit === 'true') ? 'true' : 'false';
-      delete props.button_pressed_bit;
-    }
-    if (props.facing) {
-      const f = props.facing;
-      if (f === 'down') { props.face = 'ceiling'; props.facing = 'north'; }
-      else if (f === 'up') { props.face = 'floor'; props.facing = 'north'; }
-      else { props.face = 'wall'; }
-    }
-  }
-
-  // Barrel
-  if (shortName === 'barrel') {
-    if (props.open_bit !== undefined) {
-      props.open = (props.open_bit === '1' || props.open_bit === 'true') ? 'true' : 'false';
-      delete props.open_bit;
-    } else if (!props.open) {
-      props.open = 'false';
-    }
-  }
-
-  // Dropper / Dispenser
-  if (shortName === 'dropper' || shortName === 'dispenser') {
-    if (props.triggered_bit !== undefined) {
-      props.triggered = (props.triggered_bit === '1' || props.triggered_bit === 'true') ? 'true' : 'false';
-      delete props.triggered_bit;
-    }
-  }
-
-  // Hopper
-  if (shortName === 'hopper') {
-    if (props.toggle_bit !== undefined) {
-      props.enabled = (props.toggle_bit === '0' || props.toggle_bit === 'false') ? 'true' : 'false';
-      delete props.toggle_bit;
-    }
-  }
-
-  // Trapdoor
-  if (shortName.includes('trapdoor')) {
-    if (props.direction !== undefined) {
-      const idx = Number(props.direction);
-      props.facing = Number.isFinite(idx) ? (TRAPDOOR_DIR[idx] ?? 'north') : 'north';
-      delete props.direction;
-    }
-    if (props.upside_down_bit !== undefined) {
-      props.half = (props.upside_down_bit === '1' || props.upside_down_bit === 'true') ? 'top' : 'bottom';
-      delete props.upside_down_bit;
-    }
-    if (props.open_bit !== undefined) {
-      props.open = (props.open_bit === '1' || props.open_bit === 'true') ? 'true' : 'false';
-      delete props.open_bit;
-    }
-    if (!props.open) props.open = 'false';
-    if (!props.half) props.half = 'bottom';
-    if (!props.waterlogged) props.waterlogged = 'false';
-    if (props.powered === undefined) props.powered = 'false';
-  }
-
-  // Powered / activator / detector rail
-  if (shortName === 'powered_rail' || shortName === 'activator_rail' || shortName === 'detector_rail') {
-    if (props.rail_direction !== undefined) {
-      props.shape = RAIL_SHAPE[props.rail_direction] ?? 'north_south';
-      delete props.rail_direction;
-    }
-    if (props.rail_data_bit !== undefined) {
-      props.powered = (props.rail_data_bit === '1' || props.rail_data_bit === 'true') ? 'true' : 'false';
-      delete props.rail_data_bit;
-    }
-    if (props.powered === undefined) props.powered = 'false';
-    if (!props.waterlogged) props.waterlogged = 'false';
-  }
-
-  // Lectern
-  if (shortName === 'lectern') {
-    // Bedrock の direction (0-3) → Java facing
-    if (props.direction !== undefined) {
-      const idx = Number(props.direction);
-      if (Number.isInteger(idx) && idx >= 0 && idx < 4) props.facing = REPEATER_DIR[idx]!;
-      delete props.direction;
-    }
-    // Bedrock の powered_bit はページめくりで一瞬出る信号 = Java の powered。has_book ではない。
-    if (props.powered_bit !== undefined) {
-      props.powered = (props.powered_bit === '1' || props.powered_bit === 'true') ? 'true' : 'false';
-      delete props.powered_bit;
-    }
-    if (!props.facing) props.facing = 'north';
-    if (props.has_book === undefined) props.has_book = 'false';
-    if (props.powered === undefined) props.powered = 'false';
-  }
-
-  // Slabs（チャンカーマッピングで *_double_slab → *_slab にリネーム済みの場合がある）
-  if (shortName.endsWith('_slab')) {
-    if (bedrockName.includes('double_slab')) {
-      props.type = 'double';
-    } else if (props.top_slot_bit !== undefined) {
-      props.type = (props.top_slot_bit === '1' || props.top_slot_bit === 'true') ? 'top' : 'bottom';
-    }
-    delete props.top_slot_bit;
-    if (!props.type) props.type = 'bottom';
-    if (!props.waterlogged) props.waterlogged = 'false';
-  }
-
-  // Redstone wire
-  if (shortName === 'redstone_wire') {
-    if (props.redstone_signal !== undefined) {
-      props.power = String(props.redstone_signal);
-      delete props.redstone_signal;
-    }
-    if (props.east === undefined) props.east = 'none';
-    if (props.north === undefined) props.north = 'none';
-    if (props.south === undefined) props.south = 'none';
-    if (props.west === undefined) props.west = 'none';
-    if (props.power === undefined) props.power = '0';
-  }
-
-  // Step 5: Final cleanup
+  // Step 5: final cleanup (common.dropKeys)
+  const dropKeys = STATE_RULES.common.dropKeys ?? [];
   const finalProps: Record<string, string> = {};
   for (const [k, v] of Object.entries(props)) {
-    if (k.includes('update') || k === 'age_bit' || k === 'age') continue;
-    if (k.startsWith('minecraft:')) continue;
+    if (dropKeys.some((pat) => wildcardMatch(pat, k))) continue;
     finalProps[k] = v;
   }
 

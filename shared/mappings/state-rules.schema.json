@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Bedrock -> Java block-state conversion rules",
+  "type": "object",
+  "required": ["common", "rules"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "_meta": { "type": "object" },
+    "common": {
+      "type": "object",
+      "properties": {
+        "keyAliases": {
+          "type": "object",
+          "description": "Rename namespaced Bedrock state keys (minecraft:xxx) to bare keys before any op runs.",
+          "additionalProperties": { "type": "string" }
+        },
+        "ops": { "type": "array", "items": { "$ref": "#/definitions/op" } },
+        "dropKeys": {
+          "type": "array",
+          "description": "Key patterns removed at the end. A pattern containing '*' is a wildcard (matches substrings), otherwise exact.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Evaluated in declaration order; the FIRST rule whose match applies wins. match is the alias-applied Bedrock name; '*' in match is a wildcard.",
+      "items": {
+        "type": "object",
+        "required": ["match", "ops"],
+        "properties": {
+          "match": { "type": "string" },
+          "ops": { "type": "array", "items": { "$ref": "#/definitions/op" } }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "op": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "map": {
+          "type": "object",
+          "required": ["from", "values"],
+          "description": "Look up props[from]; each value may be a string (set props[to]) or an object (set several keys). keepUnmapped keeps the raw value on props[to]; default sets props[to]=default when unmatched.",
+          "properties": {
+            "from": { "type": "string" },
+            "to": { "type": "string" },
+            "default": { "type": "string" },
+            "keepUnmapped": { "type": "boolean" },
+            "values": {
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [
+                  { "type": "string" },
+                  { "type": "object", "additionalProperties": { "type": "string" } }
+                ]
+              }
+            }
+          }
+        },
+        "mapBool": {
+          "type": "object",
+          "required": ["from", "to"],
+          "description": "Normalize 1/true -> 'true', else 'false'; invert flips.",
+          "properties": {
+            "from": { "type": "string" },
+            "to": { "type": "string" },
+            "invert": { "type": "boolean" }
+          }
+        },
+        "rename": {
+          "type": "object",
+          "required": ["from", "to"],
+          "properties": { "from": { "type": "string" }, "to": { "type": "string" } }
+        },
+        "set": { "type": "object", "additionalProperties": { "type": "string" } },
+        "setDefault": { "type": "object", "additionalProperties": { "type": "string" } },
+        "drop": { "type": "array", "items": { "type": "string" } },
+        "setName": { "type": "string" },
+        "wallVariant": {
+          "type": "object",
+          "required": ["from", "wall", "standing"],
+          "description": "Torch-style: if props[from] is absent/top/unknown -> setName standing; otherwise setName wall and set facing (flip=true reverses the direction). Consumes from.",
+          "properties": {
+            "from": { "type": "string" },
+            "wall": { "type": "string" },
+            "standing": { "type": "string" },
+            "flip": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}
