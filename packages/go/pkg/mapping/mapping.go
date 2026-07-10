@@ -29,6 +29,10 @@ type FlattenRules struct {
 }
 
 func (f *FlattenRules) UnmarshalJSON(b []byte) error {
+	// encoding/json の慣例: JSON null は no-op (素の map 型だった頃の挙動とも一致)。
+	if string(bytes.TrimSpace(b)) == "null" {
+		return nil
+	}
 	f.order = nil
 	f.rules = make(map[string]map[string]string)
 	dec := json.NewDecoder(bytes.NewReader(b))

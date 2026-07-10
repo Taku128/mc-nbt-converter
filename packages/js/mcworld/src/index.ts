@@ -150,7 +150,12 @@ export async function convertMcworld(
     return await convertOpenDb(db, opts);
   } finally {
     if (db) await db.close().catch(() => {});
-    rmSync(extractedDir, { recursive: true, force: true });
+    try {
+      rmSync(extractedDir, { recursive: true, force: true });
+    } catch {
+      // 後始末のベストエフォート (close 失敗でハンドルが残る Windows 等)。
+      // ここで throw すると本来の結果や例外をマスクしてしまう。
+    }
   }
 }
 

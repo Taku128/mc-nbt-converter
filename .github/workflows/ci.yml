@@ -33,10 +33,13 @@ jobs:
       - run: pnpm run build
       - run: node packages/js/all/test/mapping-coverage.test.mjs
       # core の mapBlock ユニットテスト + mcworld-browser の LevelDB リーダテスト
+      # + mcworld (Node) の防御パステスト (不正キーガード・tmpdir 後始末)
       - run: node --test test/*.test.mjs
         working-directory: packages/js/core
       - run: node --test test/*.test.mjs
         working-directory: packages/js/mcworld-browser
+      - run: node --test test/*.test.mjs
+        working-directory: packages/js/mcworld
 
   golden:
     name: JS/Go golden (semantic)
