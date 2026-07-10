@@ -168,7 +168,7 @@
     { "match": "minecraft:crafter", "ops": [
       { "mapBool": { "from": "triggered_bit", "to": "triggered" } },
       { "map": { "from": "crafting", "to": "crafting", "values": { "0": "false", "1": "true", "false": "false", "true": "true" } } },
-      { "setDefault": { "orientation": "north", "triggered": "false", "crafting": "false" } }
+      { "setDefault": { "orientation": "north_up", "triggered": "false", "crafting": "false" } }
     ] },
 
     { "match": "minecraft:cauldron", "ops": [ { "drop": ["cauldron_liquid"] } ] },

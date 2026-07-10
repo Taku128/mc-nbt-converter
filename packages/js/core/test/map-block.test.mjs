@@ -283,6 +283,15 @@ const CASES = [
     },
   },
   {
+    // orientation 欠落時の既定は Java の有効値 north_up (bare "north" は crafter に存在しない)
+    name: "crafter: orientation 欠落時の既定は north_up",
+    in: ["minecraft:crafter", {}],
+    out: {
+      name: "minecraft:crafter",
+      properties: { orientation: "north_up", triggered: "false", crafting: "false" },
+    },
+  },
+  {
     name: "redstone_lamp: 未点灯は lit=false 補完 (redtact patch 相当)",
     in: ["minecraft:redstone_lamp", {}],
     out: { name: "minecraft:redstone_lamp", properties: { lit: "false" } },
