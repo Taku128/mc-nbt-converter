@@ -19,6 +19,12 @@ func ConvertMcstructure(filePath string) ([]byte, []int32, int, int, error) {
 		return nil, nil, 0, 0, fmt.Errorf("readfile: %w", err)
 	}
 
+	// gophertunnel は宣言長を無検証で割り当てるため、細工ファイルによる巨大割当 (OOM) を
+	// 防ぐべく、割り当てなしの pre-flight スキャンで長さの整合を先に確認する。
+	if verr := validateNbtLE(b); verr != nil {
+		return nil, nil, 0, 0, fmt.Errorf("nbt validate: %w", verr)
+	}
+
 	var root map[string]interface{}
 	err = nbt.UnmarshalEncoding(b, &root, nbt.LittleEndian)
 	if err != nil {
