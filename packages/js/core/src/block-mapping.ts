@@ -227,6 +227,121 @@ function applyOps(ops: Op[], props: Record<string, string>, name: string): strin
   return name;
 }
 
+// state-rules が「入力側」で参照するプロパティキー (Bedrock 由来の state) の集合。
+// これを持つブロックだけが未変換の残留 Bedrock state とみなせる。正しく変換済みの
+// Java state (facing / half / powered 等) はこれらを持たないため、renormalizeState は
+// 素通しになる (冪等)。common.keyAliases の名前空間付きキーと正規化後のキーも含む。
+// in-place (from===to) かつ非冪等な map を持つキーの集合。door の facing 90°回転 /
+// piston の facing 180°反転が該当し、その from は Java ネイティブ値 (facing) を permute する。
+// このキーを residual トリガに含めると、facing を持つ正しい Java state (ドア/ピストンだけ
+// でなく全ブロック) が residual 誤判定され、door/piston rule で再変換・破壊される。
+// 逆に crafter (crafting→crafting: false→false で冪等) や sculk_sensor (phase→phase: 出力が
+// 入力キーに無く冪等) の in-place map、および repeater (repeater_delay→delay: 非 in-place で
+// 別キー出力) は安全なので残す。
+const DANGEROUS_INPLACE_KEYS: ReadonlySet<string> = (() => {
+  const bad = new Set<string>();
+  const scan = (ops: Op[] | undefined) => {
+    for (const op of ops ?? []) {
+      const m = op.map;
+      if (!m) continue;
+      const to = m.to ?? m.from;
+      if (to !== m.from) continue; // in-place のみ対象
+      for (const v of Object.values(m.values)) {
+        if (typeof v !== 'string') continue;
+        const back = m.values[v];
+        if (back !== undefined && back !== v) {
+          bad.add(m.from); // 出力値が別マッピングの入力キー = 再適用で変化 = 非冪等
+          break;
+        }
+      }
+    }
+  };
+  scan(STATE_RULES.common.ops);
+  for (const rule of STATE_RULES.rules) scan(rule.ops);
+  return bad;
+})();
+
+const RESIDUAL_STATE_KEYS: ReadonlySet<string> = (() => {
+  const keys = new Set<string>();
+  const add = (k: string) => {
+    if (!DANGEROUS_INPLACE_KEYS.has(k)) keys.add(k);
+  };
+  const collect = (ops: Op[] | undefined) => {
+    for (const op of ops ?? []) {
+      if (op.map) add(op.map.from);
+      if (op.mapBool) add(op.mapBool.from);
+      if (op.rename) add(op.rename.from);
+      if (op.wallVariant) add(op.wallVariant.from);
+      // drop 対象の Bedrock 残留キー (cauldron_liquid / top_slot_bit 等) も判定に含める。
+      for (const k of op.drop ?? []) add(k);
+    }
+  };
+  collect(STATE_RULES.common.ops);
+  for (const rule of STATE_RULES.rules) collect(rule.ops);
+  for (const [ns, local] of Object.entries(STATE_RULES.common.keyAliases ?? {})) {
+    add(ns);
+    add(local);
+  }
+  // common.dropKeys のうちワイルドカードでない具体キー (age_bit 等) も残留とみなす。
+  for (const pat of STATE_RULES.common.dropKeys ?? []) {
+    if (!pat.includes('*')) add(pat);
+  }
+  return keys;
+})();
+
+/**
+ * 既に Java 名だが、旧バージョン (core 0.3.0 未満) の変換で state プロパティが未変換の
+ * まま残った (lever_direction / weirdo_direction / rail_direction / cardinal_direction 等の
+ * Bedrock state を持つ) ブロックを、現在の state-rules で正しい Java state に再マップする。
+ *
+ * mapBlock との違いは名前解決 (Bedrock→Java) を行わない点。入力名は既に Java なので、
+ * rule のマッチにも props 変換にもその名前をそのまま使う。
+ *
+ * 冪等性: 残留 Bedrock state キー (RESIDUAL_STATE_KEYS) を 1 つも持たないブロックは
+ * 変換済みとみなして素通しする。これにより既に正しい Java state (torch の壁/床分割済み等
+ * も含む) を誤変換しない。
+ */
+export function renormalizeState(
+  javaName: string,
+  javaProps: Record<string, unknown> = {},
+): JavaBlockState {
+  const props: Record<string, string> = {};
+  let residual = false;
+  for (const [k, v] of Object.entries(javaProps)) {
+    props[k] = typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v);
+    if (RESIDUAL_STATE_KEYS.has(k)) residual = true;
+  }
+  if (!residual) {
+    return { name: javaName, properties: props };
+  }
+
+  // 名前空間付きキーの正規化 (mapBlock Step 1 と同じ)。
+  const keyAliases = STATE_RULES.common.keyAliases ?? {};
+  for (const [ns, local] of Object.entries(keyAliases)) {
+    if (props[ns] !== undefined) {
+      props[local] = props[ns]!;
+      delete props[ns];
+    }
+  }
+
+  // 名前解決は行わない。既に Java 名なので rule マッチ・変換ともこの名前を使う。
+  let name = applyOps(STATE_RULES.common.ops ?? [], props, javaName);
+  for (const rule of STATE_RULES.rules) {
+    if (wildcardMatch(rule.match, javaName)) {
+      name = applyOps(rule.ops, props, name);
+      break;
+    }
+  }
+
+  const dropKeys = STATE_RULES.common.dropKeys ?? [];
+  const finalProps: Record<string, string> = {};
+  for (const [k, v] of Object.entries(props)) {
+    if (dropKeys.some((pat) => wildcardMatch(pat, k))) continue;
+    finalProps[k] = v;
+  }
+  return { name, properties: finalProps };
+}
+
 /**
  * Map a Bedrock block name + properties to Java-compatible format.
  */
