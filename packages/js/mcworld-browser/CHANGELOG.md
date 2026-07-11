@@ -1,5 +1,12 @@
 # @taku128/mcworld-browser
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [315e176]
+  - @taku128/core@0.4.0
+
 ## 0.1.4
 
 ### Patch Changes

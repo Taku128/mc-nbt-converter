@@ -1,6 +1,6 @@
 {
   "name": "@taku128/mcworld-browser",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Convert Bedrock .mcworld (LevelDB zip) to Java Structure NBT in the browser. Pure JS — no native LevelDB binding.",
   "type": "module",
   "main": "./dist/index.cjs",
