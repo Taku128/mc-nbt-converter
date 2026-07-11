@@ -1,5 +1,12 @@
 # @taku128/mcworld
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [315e176]
+  - @taku128/core@0.4.0
+
 ## 0.1.2
 
 ### Patch Changes

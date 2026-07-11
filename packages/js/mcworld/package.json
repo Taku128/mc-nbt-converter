@@ -1,6 +1,6 @@
 {
   "name": "@taku128/mcworld",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Convert Bedrock .mcworld (LevelDB zip) to Java Structure NBT. Node.js only.",
   "type": "module",
   "main": "./dist/index.cjs",
