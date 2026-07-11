@@ -76,3 +76,57 @@ test("renormalize(Java名, 残留) == mapBlock(Bedrock名, 元 state) の state 
   const viaRen = renormalizeState("minecraft:lever", { lever_direction: "down_east_west", open_bit: "0" });
   assert.deepEqual(viaRen.properties, viaMap.properties);
 });
+
+// --- レビュー検出の facing 冪等バグの回帰テスト (door/piston/button) ---
+test("idempotent: 正しい Java door は素通し (facing を再回転しない)", () => {
+  const correct = { facing: "north", half: "lower", hinge: "left", open: "false", powered: "false" };
+  const r = renormalizeState("minecraft:oak_door", correct);
+  assert.equal(r.properties.facing, "north", "正しい door の facing が回転された");
+  assert.deepEqual(r, { name: "minecraft:oak_door", properties: correct });
+});
+
+test("idempotent: 正しい Java piston/sticky_piston は素通し (facing を再反転しない)", () => {
+  for (const [name, correct] of [
+    ["minecraft:piston", { facing: "south", extended: "false" }],
+    ["minecraft:sticky_piston", { facing: "north", extended: "false" }],
+  ]) {
+    const r = renormalizeState(name, correct);
+    assert.deepEqual(r, { name, properties: correct }, `${name} の facing が反転された`);
+  }
+});
+
+test("residual door は cardinal_direction 経由で検出・変換される (facing 除外後も)", () => {
+  const r = renormalizeState("minecraft:oak_door", {
+    "minecraft:cardinal_direction": "east", open_bit: "1", upper_block_bit: "0", door_hinge_bit: "1",
+  });
+  assert.equal(r.properties.facing, "north"); // east→north 回転
+  assert.equal(r.properties.hinge, "right");
+});
+
+test("residual piston は facing_direction 経由で検出・変換される", () => {
+  const r = renormalizeState("minecraft:piston", { facing_direction: "2" }); // 2=north → flip → south
+  assert.equal(r.properties.facing, "south");
+});
+
+test("crafter/sculk_sensor の残留は検出漏れしない (冪等 map の from は保持)", () => {
+  const cr = renormalizeState("minecraft:crafter", { crafting: "1", triggered_bit: "0", orientation: "north_up" });
+  assert.equal(cr.properties.crafting, "true");
+  const sc = renormalizeState("minecraft:sculk_sensor", { sculk_sensor_phase: "1" });
+  assert.equal(sc.properties.sculk_sensor_phase, "active");
+});
+
+test("正しい Java crafter/sculk_sensor は素通し (冪等 map)", () => {
+  const cr = renormalizeState("minecraft:crafter", { crafting: "false", triggered: "false", orientation: "north_up" });
+  assert.equal(cr.properties.crafting, "false");
+});
+
+test("door を残留→正規化→再適用しても収束する (二重適用不変)", () => {
+  const once = renormalizeState("minecraft:oak_door", { cardinal_direction: "west", open_bit: "0", upper_block_bit: "1", door_hinge_bit: "0" });
+  const twice = renormalizeState(once.name, once.properties);
+  assert.deepEqual(twice, once);
+});
+
+test("age_bit だけの残留も除去される", () => {
+  const r = renormalizeState("minecraft:oak_leaves", { age_bit: "1", persistent_bit: "0" });
+  assert.equal(r.properties.age_bit, undefined);
+});
