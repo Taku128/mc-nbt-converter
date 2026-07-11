@@ -10,7 +10,7 @@
  * Works in browsers and Node.js — mapping data is inlined at build time and
  * gzip uses `fflate` instead of Node's `zlib`.
  */
-export { mapBlock, reportUnmapped, resetUnmapped } from './block-mapping.js';
+export { mapBlock, renormalizeState, reportUnmapped, resetUnmapped } from './block-mapping.js';
 export type { JavaBlockState } from './block-mapping.js';
 
 export { buildStructureNbt } from './nbt-builder.js';
