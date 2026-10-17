@@ -56,6 +56,23 @@ func main() {
 }
 ```
 
+### 3. Convert an in-memory `.mcstructure`
+
+`.mcstructure` format version 1 and version 2 (Bedrock 26.50+, where `block_indices` is stored as IntArray and the second layer may be omitted) are both read.
+
+```go
+// b is an uncompressed little-endian .mcstructure (gunzip it first if it came over HTTP with Content-Encoding: gzip)
+nbtData, size, blockCount, paletteCount, err := bedrocknbt.ConvertMcstructureBytes(b)
+
+// Or get the Java block states without building the Java NBT
+s, err := bedrocknbt.DecodeMcstructure(b)
+for _, blk := range s.Blocks {
+	state := s.Palette[blk.State] // Name and Properties of a Java block state
+	_ = state
+	_ = blk.Pos // [x, y, z] relative to the structure origin
+}
+```
+
 ## 🛠️ Usage as a Command Line Tool
 
 ### Building the CLI
