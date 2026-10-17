@@ -34,12 +34,15 @@ jobs:
       - run: node packages/js/all/test/mapping-coverage.test.mjs
       # core の mapBlock ユニットテスト + mcworld-browser の LevelDB リーダテスト
       # + mcworld (Node) の防御パステスト (不正キーガード・tmpdir 後始末)
+      # + mcstructure の版 1 / 版 2 (統合版 26.50〜) の読み取り
       - run: node --test test/*.test.mjs
         working-directory: packages/js/core
       - run: node --test test/*.test.mjs
         working-directory: packages/js/mcworld-browser
       - run: node --test test/*.test.mjs
         working-directory: packages/js/mcworld
+      - run: node --test test/*.test.mjs
+        working-directory: packages/js/mcstructure
 
   golden:
     name: JS/Go golden (semantic)

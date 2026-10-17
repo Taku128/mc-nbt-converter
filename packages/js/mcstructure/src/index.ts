@@ -9,7 +9,7 @@
  *
  * For file-path (Node-only) APIs, import from `@taku128/mcstructure/node`.
  */
-import { NbtCompound, NbtFile, NbtList, NbtTag, NbtType } from 'deepslate/nbt';
+import { NbtCompound, NbtFile, NbtIntArray, NbtList, NbtTag, NbtType } from 'deepslate/nbt';
 import {
   mapBlock,
   buildStructureNbt,
@@ -50,13 +50,23 @@ function simplifyTag(tag: NbtTag): unknown {
 
 /**
  * Read the `block_indices` list. Bedrock mcstructure stores two layers
- * (primary + waterlogging); both are int lists of length x*y*z. We only use
- * layer 0 — layer 1 is rarely meaningful for our Java target.
+ * (primary + waterlogging) of length x*y*z. We only use layer 0 — layer 1 is
+ * rarely meaningful for our Java target.
+ *  - format_version 1: each layer is a List<Int>
+ *  - format_version 2 (Bedrock 26.50+): each layer is an IntArray, and layer 1
+ *    is left out when nothing is stored in it
  */
 function readLayer0(structure: NbtCompound): number[] {
-  const indicesList = structure.getList('block_indices', NbtType.List);
+  const indicesList = structure.getList('block_indices');
   if (indicesList.length === 0) {
     throw new Error('[mcstructure] block_indices list is empty');
+  }
+  if (indicesList.getType() === NbtType.IntArray) {
+    const first = indicesList.get(0);
+    if (!(first instanceof NbtIntArray)) {
+      throw new Error('[mcstructure] block_indices layer 0 is not an IntArray');
+    }
+    return first.toSimplifiedJson();
   }
   // Each layer is itself a List<Int>.
   const layer0 = indicesList.getList(0, NbtType.Int);
