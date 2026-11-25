@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  # runner の CMake 4 は cmake_minimum_required が 3.5 より古い CMakeLists を断る。
+  # leveldb-zlib (mcworld・mcworld-browser の依存) の leveldb-mcpe がそうなので、
+  # pnpm install でのビルドが止まる。古い指定を 3.5 として扱わせる
+  CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+
 jobs:
   mappings-sync:
     name: Verify shared mappings are in sync
