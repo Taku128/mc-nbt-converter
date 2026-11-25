@@ -1,7 +1,10 @@
 package mcstruct
 
 import (
+	"bytes"
+	"compress/zlib"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"sort"
@@ -34,7 +37,7 @@ func ConvertMcstructure(filePath string) ([]byte, []int32, int, int, error) {
 }
 
 // ConvertMcstructureBytes is ConvertMcstructure for an in-memory .mcstructure
-// (uncompressed little-endian NBT).
+// (little-endian NBT, see DecodeMcstructure for the versions read).
 func ConvertMcstructureBytes(b []byte) ([]byte, []int32, int, int, error) {
 	s, err := DecodeMcstructure(b)
 	if err != nil {
@@ -44,8 +47,9 @@ func ConvertMcstructureBytes(b []byte) ([]byte, []int32, int, int, error) {
 	return nbtBytes, s.Size, len(s.Blocks), len(s.Palette), err
 }
 
-// DecodeMcstructure reads an in-memory .mcstructure (uncompressed little-endian NBT, format
-// version 1 or 2) and translates its blocks to Java block states.
+// DecodeMcstructure reads an in-memory .mcstructure (little-endian NBT, format version 1 or 2)
+// and translates its blocks to Java block states. The structure compound may be stored
+// zlib-compressed (compression = 1, written by Bedrock 26.60+).
 func DecodeMcstructure(b []byte) (*JavaStructure, error) {
 	// gophertunnel は宣言長を無検証で割り当てるため、細工ファイルによる巨大割当 (OOM) を
 	// 防ぐべく、割り当てなしの pre-flight スキャンで長さの整合を先に確認する。
@@ -75,9 +79,9 @@ func DecodeMcstructure(b []byte) (*JavaStructure, error) {
 	}
 	sx, sy, sz := size[0], size[1], size[2]
 
-	structureData, ok := root["structure"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("missing structure map")
+	structureData, err := structureCompound(root)
+	if err != nil {
+		return nil, err
 	}
 
 	blockIndices := blockLayer(structureData["block_indices"])
@@ -205,4 +209,62 @@ func blockLayer(v interface{}) []int32 {
 		return out
 	}
 	return nil
+}
+
+// maxInflatedStructureBytes は、圧縮された structure (compression = 1) をほどいたときの大きさの上限。
+// 統合版の構造の最大 (64×384×64) でも block_indices の 2 層 (IntArray) は約 12.6 MB なので、
+// それに余裕を持たせた。小さなファイルが巨大に膨らむ細工 (zip bomb) でメモリを使い切らないようにする。
+const maxInflatedStructureBytes = 64 << 20
+
+// structureCompound はルートの structure を返す。
+//   - compression が無い・0 (統合版 26.50 まで): structure は compound
+//   - compression が 1 (統合版 26.60〜): structure は compound を LE の NBT (名前は空) に書いて
+//     zlib で縮めた ByteArray。ほどいてから読む。中身は版 1・版 2 のどちらでもよい
+func structureCompound(root map[string]interface{}) (map[string]interface{}, error) {
+	if m, ok := root["structure"].(map[string]interface{}); ok {
+		return m, nil
+	}
+	packed, ok := byteArray(root["structure"])
+	if !ok {
+		return nil, fmt.Errorf("missing structure map")
+	}
+	if c, _ := root["compression"].(int32); c != 1 {
+		return nil, fmt.Errorf("unknown structure compression %v", root["compression"])
+	}
+
+	zr, err := zlib.NewReader(bytes.NewReader(packed))
+	if err != nil {
+		return nil, fmt.Errorf("structure zlib: %w", err)
+	}
+	defer zr.Close()
+	inner, err := io.ReadAll(io.LimitReader(zr, maxInflatedStructureBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("structure zlib: %w", err)
+	}
+	if len(inner) > maxInflatedStructureBytes {
+		return nil, fmt.Errorf("structure zlib: inflated size exceeds %d bytes", maxInflatedStructureBytes)
+	}
+
+	if err := validateNbtLE(inner); err != nil {
+		return nil, fmt.Errorf("structure nbt validate: %w", err)
+	}
+	var m map[string]interface{}
+	if err := nbt.UnmarshalEncoding(inner, &m, nbt.LittleEndian); err != nil {
+		return nil, fmt.Errorf("structure nbt parse: %w", err)
+	}
+	return m, nil
+}
+
+// byteArray は NBT の ByteArray を []byte にする。gophertunnel は長さごとの配列 ([N]byte) で返す。
+func byteArray(v interface{}) ([]byte, bool) {
+	if b, ok := v.([]byte); ok {
+		return b, true
+	}
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || rv.Kind() != reflect.Array || rv.Type().Elem().Kind() != reflect.Uint8 {
+		return nil, false
+	}
+	out := make([]byte, rv.Len())
+	reflect.Copy(reflect.ValueOf(out), rv)
+	return out, true
 }

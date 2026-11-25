@@ -58,10 +58,10 @@ func main() {
 
 ### 3. Convert an in-memory `.mcstructure`
 
-`.mcstructure` format version 1 and version 2 (Bedrock 26.50+, where `block_indices` is stored as IntArray and the second layer may be omitted) are both read.
+`.mcstructure` format version 1 and version 2 (Bedrock 26.50+, where `block_indices` is stored as IntArray and the second layer may be omitted) are both read. So is the zlib-compressed form Bedrock 26.60+ writes (`compression` is 1 and `structure` is a ByteArray holding the zlib-compressed structure compound); it may inflate to at most 64 MiB.
 
 ```go
-// b is an uncompressed little-endian .mcstructure (gunzip it first if it came over HTTP with Content-Encoding: gzip)
+// b is the .mcstructure file as it is (gunzip it first if it came over HTTP with Content-Encoding: gzip)
 nbtData, size, blockCount, paletteCount, err := bedrocknbt.ConvertMcstructureBytes(b)
 
 // Or get the Java block states without building the Java NBT

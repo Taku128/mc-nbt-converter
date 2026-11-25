@@ -75,11 +75,70 @@ function readLayer0(structure: NbtCompound): number[] {
   return out;
 }
 
-function convertParsed(root: NbtCompound): ConvertResult {
+/**
+ * Upper limit for the inflated size of a compressed `structure`. Even the
+ * largest Bedrock structure (64×384×64) stores about 12.6 MB of
+ * `block_indices` (two IntArray layers), so this leaves plenty of room while
+ * stopping a small file that inflates without bound (zip bomb).
+ */
+const MAX_INFLATED_STRUCTURE_BYTES = 64 * 1024 * 1024;
+
+/** Inflate zlib (RFC 1950) data, giving up past `limit` bytes. */
+async function inflateZlib(data: Uint8Array, limit: number): Promise<Uint8Array> {
+  // DecompressionStream's 'deflate' is the zlib format. Available in browsers
+  // and Node 18+.
+  const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate')).getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        throw new Error(`[mcstructure] structure inflates past ${limit} bytes`);
+      }
+      chunks.push(value);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('[mcstructure]')) throw e;
+    throw new Error(`[mcstructure] structure is not valid zlib data: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out;
+}
+
+/**
+ * The root's `structure` compound.
+ *  - no `compression`, or 0 (up to Bedrock 26.50): `structure` is a compound
+ *  - `compression` 1 (Bedrock 26.60+): `structure` is a ByteArray holding the
+ *    compound as little-endian NBT (empty root name), zlib-compressed. Its
+ *    contents are format_version 1 or 2 like an uncompressed one
+ */
+async function readStructure(root: NbtCompound): Promise<NbtCompound> {
+  const tag = root.get('structure');
+  if (tag === undefined || !tag.isByteArray()) {
+    return root.getCompound('structure');
+  }
+  const compression = root.hasNumber('compression') ? root.getNumber('compression') : 0;
+  if (compression !== 1) {
+    throw new Error(`[mcstructure] unknown structure compression ${compression}`);
+  }
+  const packed = Uint8Array.from(tag.getItems(), (b) => b.getAsNumber() & 0xff);
+  const inner = await inflateZlib(packed, MAX_INFLATED_STRUCTURE_BYTES);
+  return NbtFile.read(inner, { littleEndian: true, compression: 'none' }).root;
+}
+
+function convertParsed(root: NbtCompound, structure: NbtCompound): ConvertResult {
   const sizeList = root.getList('size', NbtType.Int);
   const size = readIntTuple3(sizeList);
 
-  const structure = root.getCompound('structure');
   const blockIndices = readLayer0(structure);
 
   const rawPalette = structure
@@ -159,5 +218,5 @@ export async function convertMcstructureBuffer(
 ): Promise<ConvertResult> {
   const u8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const file = NbtFile.read(u8, { littleEndian: true, compression: 'none' });
-  return convertParsed(file.root);
+  return convertParsed(file.root, await readStructure(file.root));
 }
