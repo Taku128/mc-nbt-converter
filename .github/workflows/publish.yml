@@ -11,6 +11,10 @@ permissions:
   pull-requests: write # changesets/action: create/update the "Version Packages" PR
   id-token: write # npm trusted publishing (OIDC) + provenance attestation
 
+env:
+  # ci.yml と同じ。runner の CMake 4 で leveldb-zlib のビルドが止まらないようにする
+  CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+
 jobs:
   release:
     name: Release

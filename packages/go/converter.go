@@ -14,10 +14,27 @@ func ConvertMcworld(inputPath string, opts *mcworld.ConvertOptions) ([]byte, []i
 }
 
 // ConvertMcstructure parses a Bedrock Little-Endian NBT structure file (.mcstructure) and
-// translates it into a Java Big-Endian Structure NBT byte slice.
+// translates it into a Java Big-Endian Structure NBT byte slice. Both format version 1 and
+// version 2 (Bedrock 26.50+, block_indices stored as IntArray) are read, and so is a structure
+// compound stored zlib-compressed (compression = 1, written by Bedrock 26.60+).
 func ConvertMcstructure(filePath string) ([]byte, []int32, int, int, error) {
 	return mcstruct.ConvertMcstructure(filePath)
 }
+
+// ConvertMcstructureBytes is ConvertMcstructure for an in-memory .mcstructure
+// (the file bytes as they are; see ConvertMcstructure for the versions read).
+func ConvertMcstructureBytes(b []byte) ([]byte, []int32, int, int, error) {
+	return mcstruct.ConvertMcstructureBytes(b)
+}
+
+// DecodeMcstructure reads an in-memory .mcstructure and returns its blocks as Java block states
+// (palette + non-air block positions), without building the Java NBT.
+func DecodeMcstructure(b []byte) (*JavaStructure, error) {
+	return mcstruct.DecodeMcstructure(b)
+}
+
+// JavaStructure is the result of DecodeMcstructure.
+type JavaStructure = mcstruct.JavaStructure
 
 // ConvertOptions is an alias for bounding box filtering when converting .mcworld directories.
 type ConvertOptions = mcworld.ConvertOptions
