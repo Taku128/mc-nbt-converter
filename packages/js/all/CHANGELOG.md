@@ -1,5 +1,12 @@
 # @taku128/bedrock-nbt-converter
 
+## 2.0.4
+
+### Patch Changes
+
+- Updated dependencies [566f3b9]
+  - @taku128/mcstructure@0.2.7
+
 ## 2.0.3
 
 ### Patch Changes
